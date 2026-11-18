@@ -1,0 +1,1144 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ============ AUTH & TENANTS ============
+// v4 multi-tenant: every tenant-owned row carries organizationId.
+// Platform-level SUPER_ADMIN rows have organizationId = null (staff of the SaaS itself).
+// All other models use a non-null column with "unassigned" default that is backfilled
+// and enforced at the application layer (src/lib/tenancy.ts) — verified by the
+// cross-tenant penetration test suite.
+
+model AdminUser {
+  id             String        @id @default(cuid())
+  username       String        @unique
+  name           String
+  role           String        @default("ADMIN") // SUPER_ADMIN | ORG_ADMIN | ADMIN | MANAGER | SUPPORT | ACCOUNTANT | VIEWER
+  passwordHash   String
+  active         Boolean       @default(true)
+  lastLoginAt    DateTime?
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+  branchId       String?
+  branch         Branch?       @relation(fields: [branchId], references: [id])
+  createdAt      DateTime      @default(now())
+
+  @@index([organizationId])
+}
+
+// ============ ROUTERS ============
+
+model Router {
+  id               String   @id @default(cuid())
+  organizationId   String   @default("unassigned")
+  name             String
+  host             String
+  apiPort          Int      @default(8728)
+  apiSslPort       Int      @default(8729)
+  useTls           Boolean  @default(false)
+  apiUsername      String
+  apiPasswordEnc   String // AES-256-GCM encrypted at rest
+  location         String?
+  category         String   @default("main") // main | branch
+  connectionMethod String   @default("direct") // direct | agent | wireguard_agent
+  // v4: when connectionMethod="agent", the platform reaches this router through
+  // the assigned agent's outbound tunnel (no port forwarding / public IP needed)
+  agentId          String?
+  agent            NetworkAgent? @relation("managedRouters", fields: [agentId], references: [id])
+  branchId         String?
+  branch           Branch?  @relation(fields: [branchId], references: [id])
+  notes            String?
+  status           String   @default("untested") // online | offline | untested (real API test only)
+  statusMessage    String?
+  lastCheckedAt    DateTime?
+  lastOnlineAt     DateTime?
+  identity         String?
+  version          String?
+  boardName        String?
+  uptime           String?
+  cpuLoad          Int?
+  freeMemoryMb     Int?
+  totalMemoryMb    Int?
+  freeDiskMb       Int?
+  totalDiskMb      Int?
+  createdAt        DateTime @default(now())
+
+  // Discovery sync (additive — v2 upgrade)
+  syncEnabled     Boolean   @default(true)
+  syncIntervalSec Int       @default(60)
+  lastSyncAt      DateTime?
+  lastSyncOk      Boolean?
+  lastSyncError   String?
+  nextSyncAt      DateTime?
+  syncFailCount   Int       @default(0)
+  isDemo          Boolean   @default(false) // clearly-labeled simulated router for UI preview only
+
+  hotspotUsers     HotspotUser[]
+  hotspotSessions  HotspotSession[]
+  packages         Package[]
+  routerMetrics    RouterMetric[]
+  voucherBatches   VoucherBatch[]
+  vouchers         Voucher[]
+  customers        Customer[]
+  subscribers      Subscriber[]
+  networkDevices   NetworkDevice[]
+  dhcpLeases       DhcpLease[]
+  arpEntries       ArpEntry[]
+  bridgeHosts      BridgeHost[]
+  wirelessClients  WirelessClient[]
+  pppSessions      PppSession[]
+  networkResources NetworkResource[]
+  discoveryJobs    DiscoveryJob[]
+  agents           NetworkAgent[]
+  topologySnapshots TopologySnapshot[]
+
+  @@index([organizationId])
+}
+
+/// One-command router enrollment ("paste this line in the MikroTik terminal").
+/// The public token is stored hashed only; the API credentials created on the
+/// device by the served .rsc are generated here and stored encrypted.
+model RouterEnrollment {
+  id             String    @id @default(cuid())
+  organizationId String    @default("unassigned")
+  tokenHash      String    @unique
+  tokenHint      String?
+  name           String
+  location       String?
+  category       String    @default("main") // main | branch
+  apiUsername    String
+  apiPasswordEnc String
+  platformUrl    String
+  /** Host the platform should dial (user-provided, or reported by the device). */
+  host           String?
+  status         String    @default("pending") // pending | installed | expired | cancelled
+  routerId       String?
+  installCount   Int       @default(0)
+  lastInstallAt  DateTime?
+  installedAt    DateTime?
+  expiresAt      DateTime
+  createdAt      DateTime  @default(now())
+
+  @@index([organizationId, status])
+}
+
+model RouterMetric {
+  id             String   @id @default(cuid())
+  organizationId String   @default("unassigned")
+  routerId       String
+  router         Router   @relation(fields: [routerId], references: [id], onDelete: Cascade)
+  ts             DateTime
+  downloadMbps   Float
+  uploadMbps     Float
+  cpuLoad        Float
+  activeUsers    Int
+
+  @@index([organizationId])
+  @@index([routerId, ts])
+}
+
+// ============ PACKAGES ============
+
+model Package {
+  id            String   @id @default(cuid())
+  organizationId String  @default("unassigned")
+  name          String
+  description   String?
+  downloadMbps  Int
+  uploadMbps    Int
+  dataLimitMb   Int? // null = unlimited
+  durationHours Int // 1=hourly, 24=daily, 168=weekly, 720=monthly
+  price         Float
+  currency      String   @default("USD")
+  profile       String   @default("default")
+  routerId      String?
+  router        Router?  @relation(fields: [routerId], references: [id])
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+
+  hotspotUsers   HotspotUser[]
+  voucherBatches VoucherBatch[]
+  vouchers       Voucher[]
+  customers      Customer[]
+  subscribers    Subscriber[]
+  recurringPlans RecurringSubscription[]
+
+  @@index([organizationId])
+}
+
+// ============ HOTSPOT ============
+
+model HotspotUser {
+  id             String    @id @default(cuid())
+  organizationId String    @default("unassigned")
+  username       String
+  password       String
+  fullName       String?
+  phone          String?
+  packageId      String?
+  package        Package?  @relation(fields: [packageId], references: [id])
+  routerId       String?
+  router         Router?   @relation(fields: [routerId], references: [id])
+  profile        String    @default("default")
+  status         String    @default("active") // active | suspended | expired
+  dataUsedMb     Float     @default(0)
+  uptimeSec      Int       @default(0)
+  routerSynced   Boolean   @default(false)
+  activatedAt    DateTime?
+  expiresAt      DateTime?
+  createdAt      DateTime  @default(now())
+
+  sessions HotspotSession[]
+
+  @@unique([organizationId, username])
+  @@index([organizationId])
+}
+
+model HotspotSession {
+  id             String    @id @default(cuid())
+  organizationId String    @default("unassigned")
+  userId         String?
+  user           HotspotUser? @relation(fields: [userId], references: [id])
+  username       String
+  routerId       String?
+  router         Router?   @relation(fields: [routerId], references: [id])
+  ip             String?
+  mac            String?
+  startedAt      DateTime  @default(now())
+  endedAt        DateTime?
+  durationSec    Int       @default(0)
+  uploadMb       Float     @default(0)
+  downloadMb     Float     @default(0)
+  status         String    @default("active") // active | ended
+
+  @@index([organizationId])
+}
+
+// ============ CUSTOMERS (CRM) ============
+
+model Customer {
+  id             String   @id @default(cuid())
+  organizationId String   @default("unassigned")
+  name           String
+  phone          String?
+  address        String?
+  accountType    String   @default("hotspot") // hotspot | pppoe
+  routerId       String?
+  router         Router?  @relation(fields: [routerId], references: [id])
+  packageId      String?
+  package        Package? @relation(fields: [packageId], references: [id])
+  balance        Float    @default(0)
+  status         String   @default("active")
+  notes          String?
+  createdAt      DateTime @default(now())
+
+  @@index([organizationId])
+}
+
+// ============ VOUCHERS (CARDS) ============
+
+model VoucherBatch {
+  id             String   @id @default(cuid())
+  organizationId String   @default("unassigned")
+  name           String
+  routerId       String?
+  router         Router?  @relation(fields: [routerId], references: [id])
+  packageId      String?
+  package        Package? @relation(fields: [packageId], references: [id])
+  prefix         String   @default("")
+  count          Int
+  usernameLength Int      @default(6)
+  passwordLength Int      @default(4)
+  mode           String   @default("random") // random | sequential
+  profile        String   @default("default")
+  price          Float    @default(0)
+  currency       String   @default("USD")
+  validityHours  Int?
+  notes          String?
+  // ---- advanced voucher generator (v3) ----
+  authMode         String @default("user_pass") // user_pass | pin | username_only | scratch
+  codeCharset      String @default("alnum")     // alnum | numeric
+  hotspotServer    String?                      // RouterOS hotspot server name (validated live)
+  activationPolicy String @default("on_first_login") // on_first_login | immediate
+  status           String @default("pending_sync") // completed | partial | pending_sync | failed
+  syncedCount      Int    @default(0)
+  createdAt        DateTime @default(now())
+
+  vouchers Voucher[]
+
+  @@index([organizationId])
+}
+
+model Voucher {
+  id             String    @id @default(cuid())
+  organizationId String    @default("unassigned")
+  serial         String    @unique
+  username       String
+  password       String
+  batchId        String?
+  batch          VoucherBatch? @relation(fields: [batchId], references: [id])
+  packageId      String?
+  package        Package?  @relation(fields: [packageId], references: [id])
+  routerId       String?
+  router         Router?   @relation(fields: [routerId], references: [id])
+  price          Float     @default(0)
+  currency       String    @default("USD")
+  // ---- advanced voucher generator (v3) ----
+  authMode      String  @default("user_pass") // user_pass | pin | username_only | scratch
+  passwordEnc   String? // AES-256-GCM encrypted credential at rest (new generations); password kept legacy-compatible
+  hiddenOnPrint Boolean @default(false)      // scratch mode: password hidden behind scratch panel
+  status        String    @default("unused") // unused | sold | activated | expired | pending_sync | failed
+  routerSynced  Boolean   @default(false)
+  syncError     String?
+  soldAt        DateTime?
+  activatedAt   DateTime?
+  expiresAt     DateTime?
+  createdAt     DateTime  @default(now())
+
+  @@unique([organizationId, username])
+  @@index([organizationId])
+}
+
+// ============ FINANCE ============
+
+model Invoice {
+  id             String    @id @default(cuid())
+  organizationId String    @default("unassigned")
+  number         String
+  customerName   String
+  customerPhone  String?
+  description    String?
+  amount         Float
+  discount       Float     @default(0)
+  taxRate        Float     @default(0)
+  taxAmount      Float     @default(0)
+  total          Float
+  status         String    @default("unpaid") // draft | unpaid | paid | overdue | partial
+  dueDate        DateTime?
+  notes          String?
+  branchId       String?
+  branch         Branch?   @relation(fields: [branchId], references: [id])
+  subscriberId   String?
+  subscriber     Subscriber? @relation(fields: [subscriberId], references: [id])
+  createdAt      DateTime  @default(now())
+
+  payments Payment[]
+
+  @@unique([organizationId, number])
+  @@index([organizationId])
+}
+
+model Payment {
+  id             String   @id @default(cuid())
+  organizationId String   @default("unassigned")
+  invoiceId      String?
+  invoice        Invoice? @relation(fields: [invoiceId], references: [id])
+  customerName   String?
+  amount         Float
+  currency       String   @default("USD")
+  method         String   @default("cash") // cash | bank | electronic | manual
+  reference      String?
+  note           String?
+  branchId       String?
+  branch         Branch?  @relation(fields: [branchId], references: [id])
+  registerId     String?
+  register       CashRegister? @relation(fields: [registerId], references: [id])
+  receivedBy     String?
+  subscriberId   String?
+  subscriber     Subscriber? @relation(fields: [subscriberId], references: [id])
+  createdAt      DateTime @default(now())
+
+  refunds Refund[]
+
+  @@index([organizationId])
+}
+
+model Expense {
+  id             String   @id @default(cuid())
+  organizationId String   @default("unassigned")
+  category       String   @default("operational") // operational | salaries | equipment | maintenance | other
+  description    String
+  amount         Float
+  branchId       String?
+  branch         Branch?  @relation(fields: [branchId], references: [id])
+  createdAt      DateTime @default(now())
+
+  @@index([organizationId])
+}
+
+// ============ SYSTEM ============
+
+model Notification {
+  id             String   @id @default(cuid())
+  organizationId String   @default("unassigned")
+  title          String
+  body           String?
+  type           String   @default("system") // system | router | subscriber | financial | security | subscription | automation
+  severity       String   @default("info") // info | success | warning | danger
+  read           Boolean  @default(false)
+  createdAt      DateTime @default(now())
+
+  @@index([organizationId])
+}
+
+model ActivityLog {
+  id             String   @id @default(cuid())
+  organizationId String   @default("unassigned")
+  actor          String
+  action         String
+  target         String?
+  details        String?
+  createdAt      DateTime @default(now())
+
+  @@index([organizationId])
+}
+
+model Setting {
+  id    String @id @default(cuid())
+  key   String @unique
+  value String
+}
+
+model SupportTicket {
+  id             String   @id @default(cuid())
+  organizationId String   @default("unassigned")
+  subject        String
+  message        String
+  requester      String
+  priority       String   @default("medium")
+  status         String   @default("open") // open | in_progress | resolved | closed
+  createdAt      DateTime @default(now())
+
+  @@index([organizationId])
+}
+
+// ============ NETWORK DEVICE DISCOVERY (v2 — v4: organization-scoped) ============
+
+/// Unified device record — correlation key: routerId + macAddress
+model NetworkDevice {
+  id              String    @id @default(cuid())
+  organizationId  String    @default("unassigned")
+  routerId        String
+  router          Router    @relation(fields: [routerId], references: [id], onDelete: Cascade)
+  macAddress      String    // normalized lowercase AA:BB:CC:DD:EE:FF
+  ipAddress       String?   // current best-known IP
+  hostname        String?
+  customName      String?   // admin-assigned name
+  manufacturer    String?   // from local IEEE OUI DB (org only — never exact model)
+  deviceCategory  String    @default("unknown") // phone | computer | router | access_point | server | printer | camera | tv | iot | nas | switch | unknown
+  operatingSystem String?   // only when reliably identifiable (e.g. hotspot client info) — never guessed from MAC
+  connectionType  String    @default("unknown") // wired | wireless | hotspot | pppoe | unknown
+  interfaceName   String?   // current interface / bridge port
+  vlanId          Int?
+  accessPoint     String?   // AP interface / radio name serving this client
+  status          String    @default("unknown") // online | offline | idle | unknown | blocked | recently_disconnected
+  trustStatus     String    @default("unknown") // trusted | unknown | suspicious | blocked
+  sources         String    @default("[]") // JSON array: dhcp|arp|bridge|wireless|wifi|capsman|hotspot|pppoe
+  sourceDetails   String    @default("{}") // JSON: per-source lastSeen + state
+  isLocalDevice   Boolean   @default(false) // router's own MAC (bridge local)
+  isNew           Boolean   @default(false) // never reviewed by admin
+  firstSeen       DateTime  @default(now())
+  lastSeen        DateTime?
+  lastActive      DateTime? // last time an ACTIVE evidence was observed
+  blockedAt       DateTime?
+  comment         String?
+  updatedAt       DateTime  @updatedAt
+  createdAt       DateTime  @default(now())
+
+  observations   DeviceObservation[]
+  events         DeviceEvent[]
+  ipHistory      DeviceIpHistory[]
+  trafficSamples DeviceTrafficSample[]
+  trafficDaily   DeviceTrafficDaily[]
+
+  @@unique([routerId, macAddress])
+  @@index([organizationId])
+  @@index([routerId])
+  @@index([macAddress])
+  @@index([ipAddress])
+  @@index([hostname])
+  @@index([status])
+  @@index([lastSeen])
+  @@index([isNew])
+  @@index([connectionType])
+}
+
+/// Raw observation rows per source (what the router actually reported)
+model DeviceObservation {
+  id             String   @id @default(cuid())
+  organizationId String   @default("unassigned")
+  deviceId       String?
+  device         NetworkDevice? @relation(fields: [deviceId], references: [id], onDelete: SetNull)
+  routerId       String
+  source         String   // dhcp | arp | bridge | wireless | wifi | capsman | hotspot | pppoe | neighbor
+  mac            String?
+  ip             String?
+  state          String?  // bound/waiting/offered/declined | complete/invalid | dynamic etc — exactly as RouterOS reports
+  raw            String   @default("{}") // JSON of the full RouterOS row
+  seenAt         DateTime @default(now())
+
+  @@index([deviceId])
+  @@index([routerId, source])
+  @@index([mac])
+  @@index([seenAt])
+  @@index([organizationId])
+}
+
+/// Connection/status/audit events for a device
+model DeviceEvent {
+  id             String   @id @default(cuid())
+  organizationId String   @default("unassigned")
+  deviceId       String
+  device         NetworkDevice @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  type           String   // first_seen | online | offline | recently_disconnected | ip_change | interface_change | ap_change | router_change | mac_change | blocked | unblocked | trusted | suspicious | renamed | categorized | commented | session_start | session_end
+  oldValue       String?
+  newValue       String?
+  details        String?
+  source         String?  // which discovery source produced the event
+  ts             DateTime @default(now())
+
+  @@index([deviceId, ts])
+  @@index([type])
+  @@index([organizationId])
+}
+
+model DeviceIpHistory {
+  id             String   @id @default(cuid())
+  organizationId String   @default("unassigned")
+  deviceId       String
+  device         NetworkDevice @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  ipAddress      String
+  interface      String?
+  source         String?
+  firstSeen      DateTime @default(now())
+  lastSeen       DateTime
+
+  @@unique([deviceId, ipAddress])
+  @@index([ipAddress])
+  @@index([organizationId])
+}
+
+/// MAC changes observed behind the same IP/hostname (device swap, MAC randomization)
+model DeviceMacHistory {
+  id             String   @id @default(cuid())
+  organizationId String   @default("unassigned")
+  ipAddress      String
+  hostname       String?
+  routerId       String
+  mac            String
+  firstSeen      DateTime @default(now())
+  lastSeen       DateTime
+
+  @@unique([routerId, ipAddress, mac])
+  @@index([organizationId])
+}
+
+/// Live + sampled traffic per device (source honesty: session counters / interface monitor / inferred)
+model DeviceTrafficSample {
+  id             String   @id @default(cuid())
+  organizationId String   @default("unassigned")
+  deviceId       String
+  device         NetworkDevice @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  rxMbps         Float    // download
+  txMbps         Float    // upload
+  source         String   // session | interface | inferred
+  ts             DateTime @default(now())
+
+  @@index([deviceId, ts])
+  @@index([organizationId])
+}
+
+/// Daily aggregates for history charts
+model DeviceTrafficDaily {
+  id             String   @id @default(cuid())
+  organizationId String   @default("unassigned")
+  deviceId       String
+  device         NetworkDevice @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  day            String   // YYYY-MM-DD
+  downMb         Float    @default(0)
+  upMb           Float    @default(0)
+
+  @@unique([deviceId, day])
+  @@index([day])
+  @@index([organizationId])
+}
+
+/// Global KPI snapshot per sync cycle (online-over-time charts)
+model DeviceStatsSnapshot {
+  id             String   @id @default(cuid())
+  organizationId String   @default("unassigned")
+  routerId       String?
+  total          Int
+  online         Int
+  offline        Int
+  idle           Int
+  unknown        Int
+  wireless       Int
+  wired          Int
+  hotspot        Int
+  pppoe          Int
+  blocked        Int
+  newDevices     Int      @default(0)
+  ts             DateTime @default(now())
+
+  @@index([ts])
+  @@index([organizationId])
+}
+
+// ---- Raw per-source tables (exact RouterOS data, keyed to router) ----
+
+model DhcpLease {
+  id             String    @id @default(cuid())
+  organizationId String    @default("unassigned")
+  routerId       String
+  router         Router    @relation(fields: [routerId], references: [id], onDelete: Cascade)
+  rosId          String?   // RouterOS internal .id at last sync
+  address        String
+  macAddress     String
+  hostname       String?
+  serverName     String?
+  status         String    @default("unknown") // bound | waiting | offered | declined | expired — exactly as RouterOS reports
+  dynamic        Boolean   @default(true)
+  blocked        Boolean   @default(false)
+  disabled       Boolean   @default(false)
+  expiresAt      DateTime?
+  lastSeen       DateTime?
+  addressPool    String?
+  clientId       String?
+  comment        String?
+  seenAt         DateTime  @default(now())
+
+  @@unique([routerId, address, macAddress])
+  @@index([macAddress])
+  @@index([address])
+  @@index([status])
+  @@index([organizationId])
+}
+
+model ArpEntry {
+  id             String   @id @default(cuid())
+  organizationId String   @default("unassigned")
+  routerId       String
+  router         Router   @relation(fields: [routerId], references: [id], onDelete: Cascade)
+  rosId          String?
+  address        String
+  macAddress     String?
+  interface      String?
+  dynamic        Boolean  @default(true)
+  complete       Boolean  @default(false)
+  invalid        Boolean  @default(false)
+  published      Boolean  @default(false)
+  comment        String?
+  seenAt         DateTime @default(now())
+
+  @@unique([routerId, address])
+  @@index([macAddress])
+  @@index([interface])
+  @@index([organizationId])
+}
+
+/// Layer-2 bridge host table — essential for identifying devices connected at L2
+model BridgeHost {
+  id             String   @id @default(cuid())
+  organizationId String   @default("unassigned")
+  routerId       String
+  router         Router   @relation(fields: [routerId], references: [id], onDelete: Cascade)
+  rosId          String?
+  macAddress     String
+  bridge         String?
+  interface      String?  // bridge port the host is seen on
+  vlanId         Int?
+  isLocal        Boolean  @default(false) // local = router's own MAC
+  dynamic        Boolean  @default(true)
+  externalFdb    Boolean  @default(false)
+  seenAt         DateTime @default(now())
+
+  @@unique([routerId, macAddress, bridge, interface])
+  @@index([macAddress])
+  @@index([bridge])
+  @@index([organizationId])
+}
+
+/// Wireless registration table (legacy wireless, modern wifi, CAPsMAN)
+model WirelessClient {
+  id             String   @id @default(cuid())
+  organizationId String   @default("unassigned")
+  routerId       String
+  router         Router   @relation(fields: [routerId], references: [id], onDelete: Cascade)
+  rosId          String?
+  macAddress     String
+  apiPath        String   // wireless | wifi | capsman — which package reported it
+  interface      String?  // AP interface name
+  radioName      String?
+  ssid           String?
+  signal         String?  // exactly as RouterOS reports (e.g. -56dBm@HT20)
+  txRate         String?
+  rxRate         String?
+  uptime         String?
+  band           String?
+  rxSignalCh     String?  // per-chain signals when available
+  registeredAt   DateTime?
+  seenAt         DateTime @default(now())
+
+  @@unique([routerId, macAddress, apiPath])
+  @@index([macAddress])
+  @@index([interface])
+  @@index([organizationId])
+}
+
+/// Active PPP sessions (PPPoE etc.)
+model PppSession {
+  id             String   @id @default(cuid())
+  organizationId String   @default("unassigned")
+  routerId       String
+  router         Router   @relation(fields: [routerId], references: [id], onDelete: Cascade)
+  rosId          String?
+  username       String
+  service        String?  // pppoe | l2tp | pptp | sstp
+  callerId       String?  // MAC when available
+  address        String?  // assigned remote IP
+  profile        String?
+  uptime         String?
+  encoding       String?
+  seenAt         DateTime @default(now())
+
+  @@unique([routerId, username, service])
+  @@index([username])
+  @@index([callerId])
+  @@index([organizationId])
+}
+
+/// Generic resource rows: interfaces, addresses, dhcp servers/networks, neighbors,
+/// routes, firewall connections, address lists, dns — normalized per source
+model NetworkResource {
+  id             String   @id @default(cuid())
+  organizationId String   @default("unassigned")
+  routerId       String
+  router         Router   @relation(fields: [routerId], references: [id], onDelete: Cascade)
+  source         String   // interfaces | addresses | dhcp_servers | dhcp_networks | neighbors | routes | firewall_connections | address_lists
+  key            String   // natural key (iface name / address / dst etc.)
+  data           String   @default("{}") // JSON full normalized row
+  seenAt         DateTime @default(now())
+
+  @@unique([routerId, source, key])
+  @@index([source])
+  @@index([organizationId])
+}
+
+model DiscoveryJob {
+  id             String    @id @default(cuid())
+  organizationId String    @default("unassigned")
+  routerId       String
+  router         Router    @relation(fields: [routerId], references: [id], onDelete: Cascade)
+  type           String    @default("scheduled") // scheduled | manual | sources
+  status         String    @default("running") // running | success | partial | failed
+  trigger        String    @default("scheduler") // scheduler | user
+  sourcesDone    String    @default("[]")
+  sourcesFailed  String    @default("[]")
+  stats          String    @default("{}") // JSON: counts per source + new devices
+  error          String?
+  durationMs     Int?
+  startedAt      DateTime  @default(now())
+  finishedAt     DateTime?
+
+  logs DiscoveryJobLog[]
+
+  @@index([routerId])
+  @@index([startedAt])
+  @@index([organizationId])
+}
+
+model DiscoveryJobLog {
+  id             String   @id @default(cuid())
+  organizationId String   @default("unassigned")
+  jobId          String
+  job            DiscoveryJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  level          String   @default("info") // info | warn | error
+  source         String?
+  message        String
+  ts             DateTime @default(now())
+
+  @@index([jobId])
+  @@index([organizationId])
+}
+
+/// Reusable blocking policies applied via RouterOS
+model DeviceBlockRule {
+  id             String   @id @default(cuid())
+  organizationId String   @default("unassigned")
+  routerId       String
+  deviceId       String?
+  macAddress     String
+  method         String   @default("firewall_forward_drop") // firewall_forward_drop | hotspot_disable | wireless_acl | dhcp_lease_block
+  listName       String?  // address-list name when applicable
+  rosItemIds     String?  @default("[]") // RouterOS .id list of created rules for unblock
+  status         String   @default("active") // active | failed | removed
+  error          String?
+  createdBy      String?  // admin username
+  createdAt      DateTime @default(now())
+  removedAt      DateTime?
+
+  @@index([macAddress])
+  @@index([routerId])
+  @@index([organizationId])
+}
+
+// ============ ORGANIZATIONS & BRANCHES (v3 — v4: SaaS tenant root) ============
+
+model Organization {
+  id                 String   @id @default(cuid())
+  name               String
+  code               String   @unique
+  active             Boolean  @default(true)
+  createdAt          DateTime @default(now())
+
+  // ---- v4 commercial SaaS ----
+  plan               String   @default("trial") // trial | starter | pro | enterprise
+  subscriptionStatus String   @default("trialing") // trialing | active | past_due | suspended | canceled
+  trialEndsAt        DateTime?
+  currentPeriodStart DateTime?
+  currentPeriodEnd   DateTime?
+  maxRouters         Int      @default(3)
+  maxUsers           Int      @default(5)
+  maxVouchersPerBatch Int     @default(250)
+  brandName          String?
+  brandPrimary       String?
+  logoUrl            String?
+  suspendedAt        DateTime?
+  suspensionReason   String?
+
+  branches      Branch[]
+  admins        AdminUser[]
+  orgInvoices   OrgInvoice[]
+  usageCounters UsageCounter[]
+}
+
+model Branch {
+  id             String   @id @default(cuid())
+  organizationId String   @default("unassigned")
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+  name           String
+  code           String   @unique
+  phone          String?
+  address        String?
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+
+  routers        Router[]
+  users          AdminUser[]
+  subscribers    Subscriber[]
+  invoices       Invoice[]
+  payments       Payment[]
+  expenses       Expense[]
+  transactions   CustomerTx[]
+  registers      CashRegister[]
+  closings       DailyClosing[]
+  commissions    EmployeeCommission[]
+  agents         NetworkAgent[]
+
+  @@index([organizationId])
+}
+
+// ============ UNIFIED SUBSCRIBER PROFILES (v3 — v4: organization-scoped) ============
+
+/// Single unified subscriber account linking devices, sessions, package,
+/// router, payments, vouchers, IPs/MACs, usage and expiration.
+model Subscriber {
+  id             String    @id @default(cuid())
+  organizationId String    @default("unassigned")
+  code           String    // human-facing account code (unique per organization)
+  name           String
+  phone          String?
+  email          String?
+  address        String?
+  accountType    String    @default("hotspot") // hotspot | pppoe | both
+  username       String?   // router-side identity (hotspot username or PPP secret name)
+  routerId       String?
+  router         Router?   @relation(fields: [routerId], references: [id])
+  branchId       String?
+  branch         Branch?   @relation(fields: [branchId], references: [id])
+  packageId      String?
+  package        Package?  @relation(fields: [packageId], references: [id])
+  status         String    @default("registered") // registered | active | suspended | expired | terminated
+  balance        Float     @default(0)
+  macAddresses   String?   // JSON array of linked device MACs
+  autoRenew      Boolean   @default(false)
+  activatedAt    DateTime?
+  suspendedAt    DateTime?
+  terminatedAt   DateTime?
+  expiresAt      DateTime?
+  notes          String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  events        SubscriberEvent[]
+  subscriptions RecurringSubscription[]
+  invoices      Invoice[]
+  payments      Payment[]
+  transactions  CustomerTx[]
+
+  @@unique([organizationId, code])
+  @@index([organizationId])
+}
+
+/// Full lifecycle audit trail for a subscriber.
+model SubscriberEvent {
+  id             String   @id @default(cuid())
+  organizationId String   @default("unassigned")
+  subscriberId   String
+  subscriber     Subscriber @relation(fields: [subscriberId], references: [id], onDelete: Cascade)
+  type           String   // registered | activated | renewed | suspended | reactivated | package_migrated | terminated | router_sync_error | router_sync_ok
+  detail         String?
+  actor          String?
+  createdAt      DateTime @default(now())
+
+  @@index([subscriberId, createdAt])
+  @@index([organizationId])
+}
+
+/// Recurring billing engine — generates invoices automatically per cycle.
+model RecurringSubscription {
+  id             String    @id @default(cuid())
+  organizationId String    @default("unassigned")
+  subscriberId   String
+  subscriber     Subscriber @relation(fields: [subscriberId], references: [id], onDelete: Cascade)
+  packageId      String?
+  package        Package?  @relation(fields: [packageId], references: [id])
+  routerId       String?
+  cycle          String    @default("monthly") // daily | weekly | monthly | yearly
+  amount         Float
+  currency       String    @default("USD")
+  discountPct    Float     @default(0)
+  taxRatePct     Float     @default(0)
+  nextRunAt      DateTime
+  lastRunAt      DateTime?
+  active         Boolean   @default(true)
+  autoInvoice    Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+
+  @@index([nextRunAt, active])
+  @@index([organizationId])
+}
+
+// ============ FINANCIAL LEDGER & ISP ACCOUNTING (v3 — v4: organization-scoped) ============
+
+/// Single ledger of every financial movement. reference is an idempotency key:
+/// duplicates (same reference) are rejected at DB level — no double records.
+model CustomerTx {
+  id             String   @id @default(cuid())
+  organizationId String   @default("unassigned")
+  type           String   // charge | payment | refund | discount | adjustment | voucher_sale | commission | expense
+  subscriberId   String?
+  subscriber     Subscriber? @relation(fields: [subscriberId], references: [id])
+  branchId       String?
+  branch         Branch?  @relation(fields: [branchId], references: [id])
+  amount         Float    // signed: + inflow (payment/charge) - outflow (refund/expense)
+  currency       String   @default("USD")
+  method         String?  // cash | bank | electronic | manual
+  reference      String?  @unique // idempotency key (e.g. "payment:<paymentId>")
+  refType        String?  // invoice | payment | voucher_batch | subscription | closing
+  refId          String?
+  note           String?
+  registerId     String?
+  employeeName   String?
+  createdAt      DateTime @default(now())
+
+  @@index([subscriberId, createdAt])
+  @@index([branchId, createdAt])
+  @@index([type, createdAt])
+  @@index([organizationId])
+}
+
+model Refund {
+  id             String   @id @default(cuid())
+  organizationId String   @default("unassigned")
+  paymentId      String
+  payment        Payment? @relation(fields: [paymentId], references: [id])
+  amount         Float
+  reason         String?
+  actor          String?
+  createdAt      DateTime @default(now())
+
+  @@index([organizationId])
+}
+
+model CashRegister {
+  id             String    @id @default(cuid())
+  organizationId String    @default("unassigned")
+  name           String
+  branchId       String?
+  branch         Branch?   @relation(fields: [branchId], references: [id])
+  opened         Boolean   @default(false)
+  openedAt       DateTime?
+  openedBy       String?
+  closingNote    String?
+  createdAt      DateTime  @default(now())
+
+  payments Payment[]
+
+  @@index([organizationId])
+}
+
+model DailyClosing {
+  id             String   @id @default(cuid())
+  organizationId String   @default("unassigned")
+  branchId       String?
+  branch         Branch?  @relation(fields: [branchId], references: [id])
+  day            String   // YYYY-MM-DD
+  revenue        Float    @default(0)
+  refunds        Float    @default(0)
+  expenses       Float    @default(0)
+  commissions    Float    @default(0)
+  netCash        Float    @default(0)
+  txCount        Int      @default(0)
+  closedBy       String?
+  closedAt       DateTime @default(now())
+
+  @@unique([organizationId, branchId, day])
+  @@index([organizationId])
+}
+
+model EmployeeCommission {
+  id             String   @id @default(cuid())
+  organizationId String   @default("unassigned")
+  employeeName   String
+  branchId       String?
+  branch         Branch?  @relation(fields: [branchId], references: [id])
+  refType        String?  // payment | voucher_batch
+  refId          String?
+  rate           Float    @default(0) // percent
+  amount         Float
+  paid           Boolean  @default(false)
+  paidAt         DateTime?
+  createdAt      DateTime @default(now())
+
+  @@index([organizationId])
+}
+
+// ============ REMOTE NETWORK AGENT (v3 — v4: multi-router + org-scoped) ============
+
+/// Lightweight agent deployed inside the customer LAN (outbound-only connection).
+/// tokenHash = SHA-256 of the bearer token the agent presents; plaintext never stored.
+/// v4: config.routers[] supports MULTIPLE MikroTik devices behind the same NAT/CGNAT site.
+model NetworkAgent {
+  id             String    @id @default(cuid())
+  organizationId String    @default("unassigned")
+  name           String
+  tokenHash      String    @unique
+  enrollCodeHash String?   @unique // SHA-256 of the one-command bootstrap code (mtcm-...)
+  enrollCodeHint String?   // last 4 chars shown in UI — plaintext never stored
+  branchId       String?
+  branch         Branch?   @relation(fields: [branchId], references: [id])
+  routerId       String?
+  router         Router?   @relation(fields: [routerId], references: [id])
+  managedRouters Router[]  @relation("managedRouters")
+  version        String?
+  status         String    @default("offline") // online | offline
+  remoteIp       String?
+  capabilities   String?   // JSON list
+  config         String?   // JSON — remote configuration { routers: [{ routerId, host, port, username, passwordEnc }], pollMs }
+  lastSeenAt     DateTime?
+  createdAt      DateTime  @default(now())
+
+  commands AgentCommand[]
+
+  @@index([organizationId])
+}
+
+/// Command queue relayed to agents over the outbound socket.
+/// v4: payload.routerId selects which LAN-side router the command targets.
+model AgentCommand {
+  id             String    @id @default(cuid())
+  organizationId String    @default("unassigned")
+  agentId        String
+  agent          NetworkAgent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  command        String    // JSON payload
+  status         String    @default("queued") // queued | sent | done | failed | expired
+  result         String?
+  error          String?
+  createdAt      DateTime  @default(now())
+  completedAt    DateTime?
+
+  @@index([agentId, status])
+  @@index([organizationId])
+}
+
+// ============ COMMERCIAL SAAS (v4) ============
+
+/// Platform-side invoice for a tenant's subscription (distinct from ISP customer invoices).
+model OrgInvoice {
+  id             String    @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  plan           String
+  amount         Float
+  currency       String    @default("USD")
+  periodStart    DateTime
+  periodEnd      DateTime
+  status         String    @default("open") // open | paid | void
+  paidAt         DateTime?
+  createdAt      DateTime  @default(now())
+
+  @@index([organizationId])
+}
+
+/// Daily usage metering per organization (SaaS billing + limits).
+model UsageCounter {
+  id             String   @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  day            String   // YYYY-MM-DD
+  metric         String   // routers | devices_online | vouchers_generated | subscribers | api_calls
+  value          Float    @default(0)
+
+  @@unique([organizationId, day, metric])
+  @@index([organizationId])
+}
+
+/// Topology snapshot for historical playback (Phase 1).
+model TopologySnapshot {
+  id            String   @id @default(cuid())
+  organizationId String   @default("unassigned")
+  routerId      String
+  router        Router   @relation(fields: [routerId], references: [id], onDelete: Cascade)
+  snapshot      Json     // { nodes: TopologyNode[], edges: TopologyEdge[], bandwidth: Record<string, {rx: number, tx: number}> }
+  ts            DateTime @default(now())
+
+  @@index([organizationId])
+  @@index([routerId, ts])
+}
+
+/// Aggregated traffic per entity (AP / area / router) for Phase 2.
+model TrafficAggregate {
+  id             String   @id @default(cuid())
+  organizationId String   @default("unassigned")
+  entityType     String   // "ap" | "area" | "router"
+  entityId       String
+  day            String   // YYYY-MM-DD
+  downMb         Float    @default(0)
+  upMb           Float    @default(0)
+
+  @@unique([organizationId, entityType, entityId, day])
+  @@index([organizationId, day])
+}
+
+/// Alerting engine (Phase 4).
+model Alert {
+  id             String   @id @default(cuid())
+  organizationId String
+  rule           String
+  severity       String   // info | warning | critical
+  entityType     String   // "ap" | "router" | "area" | "device"
+  entityId       String
+  message        String
+  acknowledgedAt DateTime?
+  createdAt      DateTime @default(now())
+
+  @@index([organizationId, createdAt])
+  @@index([organizationId, entityType, entityId])
+}

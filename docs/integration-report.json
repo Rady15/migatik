@@ -1,0 +1,549 @@
+{
+  "generatedAt": "2026-11-16 08:04:58",
+  "target": {
+    "host": "192.168.1.3",
+    "port": 8728,
+    "tls": false,
+    "user": "admin"
+  },
+  "connection": {
+    "ok": false,
+    "error": "انتهت مهلة الاتصال بالسيرفر (timeout)"
+  },
+  "router": {
+    "identity": "(unknown)",
+    "version": "?"
+  },
+  "sources": [
+    {
+      "id": "system_identity",
+      "title": "Router identity",
+      "command": "/system/identity/print",
+      "connected": false,
+      "status": "connect_fail",
+      "parsedRecords": 0,
+      "sampleFields": [],
+      "durationMs": 0,
+      "lastSuccessfulSync": null,
+      "error": "SKIPPED — router unreachable (connection failed). No data can be reported honestly."
+    },
+    {
+      "id": "system_resource",
+      "title": "CPU / memory / uptime / version",
+      "command": "/system/resource/print",
+      "connected": false,
+      "status": "connect_fail",
+      "parsedRecords": 0,
+      "sampleFields": [],
+      "durationMs": 0,
+      "lastSuccessfulSync": null,
+      "error": "SKIPPED — router unreachable (connection failed). No data can be reported honestly."
+    },
+    {
+      "id": "system_health",
+      "title": "Board health (voltage/temp — when present)",
+      "command": "/system/health/print",
+      "connected": false,
+      "status": "connect_fail",
+      "parsedRecords": 0,
+      "sampleFields": [],
+      "durationMs": 0,
+      "lastSuccessfulSync": null,
+      "error": "SKIPPED — router unreachable (connection failed). No data can be reported honestly."
+    },
+    {
+      "id": "dhcp_leases",
+      "title": "DHCP leases",
+      "command": "/ip/dhcp-server/lease/print",
+      "connected": false,
+      "status": "connect_fail",
+      "parsedRecords": 0,
+      "sampleFields": [],
+      "durationMs": 0,
+      "lastSuccessfulSync": null,
+      "error": "SKIPPED — router unreachable (connection failed). No data can be reported honestly."
+    },
+    {
+      "id": "dhcp_servers",
+      "title": "DHCP servers",
+      "command": "/ip/dhcp-server/print",
+      "connected": false,
+      "status": "connect_fail",
+      "parsedRecords": 0,
+      "sampleFields": [],
+      "durationMs": 0,
+      "lastSuccessfulSync": null,
+      "error": "SKIPPED — router unreachable (connection failed). No data can be reported honestly."
+    },
+    {
+      "id": "dhcp_networks",
+      "title": "DHCP networks",
+      "command": "/ip/dhcp-server/network/print",
+      "connected": false,
+      "status": "connect_fail",
+      "parsedRecords": 0,
+      "sampleFields": [],
+      "durationMs": 0,
+      "lastSuccessfulSync": null,
+      "error": "SKIPPED — router unreachable (connection failed). No data can be reported honestly."
+    },
+    {
+      "id": "arp",
+      "title": "ARP table",
+      "command": "/ip/arp/print",
+      "connected": false,
+      "status": "connect_fail",
+      "parsedRecords": 0,
+      "sampleFields": [],
+      "durationMs": 0,
+      "lastSuccessfulSync": null,
+      "error": "SKIPPED — router unreachable (connection failed). No data can be reported honestly."
+    },
+    {
+      "id": "bridge_hosts",
+      "title": "Bridge hosts (L2 evidence + VLAN)",
+      "command": "/interface/bridge/host/print",
+      "connected": false,
+      "status": "connect_fail",
+      "parsedRecords": 0,
+      "sampleFields": [],
+      "durationMs": 0,
+      "lastSuccessfulSync": null,
+      "error": "SKIPPED — router unreachable (connection failed). No data can be reported honestly."
+    },
+    {
+      "id": "bridges",
+      "title": "Bridges",
+      "command": "/interface/bridge/print",
+      "connected": false,
+      "status": "connect_fail",
+      "parsedRecords": 0,
+      "sampleFields": [],
+      "durationMs": 0,
+      "lastSuccessfulSync": null,
+      "error": "SKIPPED — router unreachable (connection failed). No data can be reported honestly."
+    },
+    {
+      "id": "vlan_interfaces",
+      "title": "VLAN interfaces",
+      "command": "/interface/vlan/print",
+      "connected": false,
+      "status": "connect_fail",
+      "parsedRecords": 0,
+      "sampleFields": [],
+      "durationMs": 0,
+      "lastSuccessfulSync": null,
+      "error": "SKIPPED — router unreachable (connection failed). No data can be reported honestly."
+    },
+    {
+      "id": "wireless",
+      "title": "Wireless registration (legacy package)",
+      "command": "/interface/wireless/registration-table/print",
+      "connected": false,
+      "status": "connect_fail",
+      "parsedRecords": 0,
+      "sampleFields": [],
+      "durationMs": 0,
+      "lastSuccessfulSync": null,
+      "error": "SKIPPED — router unreachable (connection failed). No data can be reported honestly."
+    },
+    {
+      "id": "wifi",
+      "title": "WiFi registration (v7 wifi package)",
+      "command": "/interface/wifi/registration-table/print",
+      "connected": false,
+      "status": "connect_fail",
+      "parsedRecords": 0,
+      "sampleFields": [],
+      "durationMs": 0,
+      "lastSuccessfulSync": null,
+      "error": "SKIPPED — router unreachable (connection failed). No data can be reported honestly."
+    },
+    {
+      "id": "capsman",
+      "title": "CAPsMAN registration",
+      "command": "/caps-man/registration-table/print",
+      "connected": false,
+      "status": "connect_fail",
+      "parsedRecords": 0,
+      "sampleFields": [],
+      "durationMs": 0,
+      "lastSuccessfulSync": null,
+      "error": "SKIPPED — router unreachable (connection failed). No data can be reported honestly."
+    },
+    {
+      "id": "capsman_caps",
+      "title": "CAPsMAN remote CAPs",
+      "command": "/caps-man/remote-cap/print",
+      "connected": false,
+      "status": "connect_fail",
+      "parsedRecords": 0,
+      "sampleFields": [],
+      "durationMs": 0,
+      "lastSuccessfulSync": null,
+      "error": "SKIPPED — router unreachable (connection failed). No data can be reported honestly."
+    },
+    {
+      "id": "hotspot_active",
+      "title": "Hotspot active sessions",
+      "command": "/ip/hotspot/active/print",
+      "connected": false,
+      "status": "connect_fail",
+      "parsedRecords": 0,
+      "sampleFields": [],
+      "durationMs": 0,
+      "lastSuccessfulSync": null,
+      "error": "SKIPPED — router unreachable (connection failed). No data can be reported honestly."
+    },
+    {
+      "id": "hotspot_host",
+      "title": "Hotspot hosts",
+      "command": "/ip/hotspot/host/print",
+      "connected": false,
+      "status": "connect_fail",
+      "parsedRecords": 0,
+      "sampleFields": [],
+      "durationMs": 0,
+      "lastSuccessfulSync": null,
+      "error": "SKIPPED — router unreachable (connection failed). No data can be reported honestly."
+    },
+    {
+      "id": "hotspot_users",
+      "title": "Hotspot users (vouchers)",
+      "command": "/ip/hotspot/user/print",
+      "connected": false,
+      "status": "connect_fail",
+      "parsedRecords": 0,
+      "sampleFields": [],
+      "durationMs": 0,
+      "lastSuccessfulSync": null,
+      "error": "SKIPPED — router unreachable (connection failed). No data can be reported honestly."
+    },
+    {
+      "id": "ppp_active",
+      "title": "PPPoE active sessions",
+      "command": "/ppp/active/print",
+      "connected": false,
+      "status": "connect_fail",
+      "parsedRecords": 0,
+      "sampleFields": [],
+      "durationMs": 0,
+      "lastSuccessfulSync": null,
+      "error": "SKIPPED — router unreachable (connection failed). No data can be reported honestly."
+    },
+    {
+      "id": "ppp_secrets",
+      "title": "PPP secrets",
+      "command": "/ppp/secret/print",
+      "connected": false,
+      "status": "connect_fail",
+      "parsedRecords": 0,
+      "sampleFields": [],
+      "durationMs": 0,
+      "lastSuccessfulSync": null,
+      "error": "SKIPPED — router unreachable (connection failed). No data can be reported honestly."
+    },
+    {
+      "id": "ppp_profiles",
+      "title": "PPP profiles",
+      "command": "/ppp/profile/print",
+      "connected": false,
+      "status": "connect_fail",
+      "parsedRecords": 0,
+      "sampleFields": [],
+      "durationMs": 0,
+      "lastSuccessfulSync": null,
+      "error": "SKIPPED — router unreachable (connection failed). No data can be reported honestly."
+    },
+    {
+      "id": "interfaces",
+      "title": "Interfaces",
+      "command": "/interface/print",
+      "connected": false,
+      "status": "connect_fail",
+      "parsedRecords": 0,
+      "sampleFields": [],
+      "durationMs": 0,
+      "lastSuccessfulSync": null,
+      "error": "SKIPPED — router unreachable (connection failed). No data can be reported honestly."
+    },
+    {
+      "id": "addresses",
+      "title": "IP addresses",
+      "command": "/ip/address/print",
+      "connected": false,
+      "status": "connect_fail",
+      "parsedRecords": 0,
+      "sampleFields": [],
+      "durationMs": 0,
+      "lastSuccessfulSync": null,
+      "error": "SKIPPED — router unreachable (connection failed). No data can be reported honestly."
+    },
+    {
+      "id": "ip_pools",
+      "title": "IP pools",
+      "command": "/ip/pool/print",
+      "connected": false,
+      "status": "connect_fail",
+      "parsedRecords": 0,
+      "sampleFields": [],
+      "durationMs": 0,
+      "lastSuccessfulSync": null,
+      "error": "SKIPPED — router unreachable (connection failed). No data can be reported honestly."
+    },
+    {
+      "id": "neighbors",
+      "title": "Neighbor discovery (LLDP/MNDP)",
+      "command": "/ip/neighbor/print",
+      "connected": false,
+      "status": "connect_fail",
+      "parsedRecords": 0,
+      "sampleFields": [],
+      "durationMs": 0,
+      "lastSuccessfulSync": null,
+      "error": "SKIPPED — router unreachable (connection failed). No data can be reported honestly."
+    },
+    {
+      "id": "routes",
+      "title": "Routing table",
+      "command": "/ip/route/print",
+      "connected": false,
+      "status": "connect_fail",
+      "parsedRecords": 0,
+      "sampleFields": [],
+      "durationMs": 0,
+      "lastSuccessfulSync": null,
+      "error": "SKIPPED — router unreachable (connection failed). No data can be reported honestly."
+    },
+    {
+      "id": "dns",
+      "title": "DNS settings",
+      "command": "/ip/dns/print",
+      "connected": false,
+      "status": "connect_fail",
+      "parsedRecords": 0,
+      "sampleFields": [],
+      "durationMs": 0,
+      "lastSuccessfulSync": null,
+      "error": "SKIPPED — router unreachable (connection failed). No data can be reported honestly."
+    },
+    {
+      "id": "firewall_connections",
+      "title": "Firewall connections",
+      "command": "/ip/firewall/connection/print",
+      "connected": false,
+      "status": "connect_fail",
+      "parsedRecords": 0,
+      "sampleFields": [],
+      "durationMs": 0,
+      "lastSuccessfulSync": null,
+      "error": "SKIPPED — router unreachable (connection failed). No data can be reported honestly."
+    },
+    {
+      "id": "firewall_filter",
+      "title": "Firewall filter rules",
+      "command": "/ip/firewall/filter/print",
+      "connected": false,
+      "status": "connect_fail",
+      "parsedRecords": 0,
+      "sampleFields": [],
+      "durationMs": 0,
+      "lastSuccessfulSync": null,
+      "error": "SKIPPED — router unreachable (connection failed). No data can be reported honestly."
+    },
+    {
+      "id": "firewall_nat",
+      "title": "Firewall NAT rules",
+      "command": "/ip/firewall/nat/print",
+      "connected": false,
+      "status": "connect_fail",
+      "parsedRecords": 0,
+      "sampleFields": [],
+      "durationMs": 0,
+      "lastSuccessfulSync": null,
+      "error": "SKIPPED — router unreachable (connection failed). No data can be reported honestly."
+    },
+    {
+      "id": "address_lists",
+      "title": "Firewall address-lists",
+      "command": "/ip/firewall/address-list/print",
+      "connected": false,
+      "status": "connect_fail",
+      "parsedRecords": 0,
+      "sampleFields": [],
+      "durationMs": 0,
+      "lastSuccessfulSync": null,
+      "error": "SKIPPED — router unreachable (connection failed). No data can be reported honestly."
+    },
+    {
+      "id": "queue_simple",
+      "title": "Simple queues",
+      "command": "/queue/simple/print",
+      "connected": false,
+      "status": "connect_fail",
+      "parsedRecords": 0,
+      "sampleFields": [],
+      "durationMs": 0,
+      "lastSuccessfulSync": null,
+      "error": "SKIPPED — router unreachable (connection failed). No data can be reported honestly."
+    },
+    {
+      "id": "queue_tree",
+      "title": "Queue trees",
+      "command": "/queue/tree/print",
+      "connected": false,
+      "status": "connect_fail",
+      "parsedRecords": 0,
+      "sampleFields": [],
+      "durationMs": 0,
+      "lastSuccessfulSync": null,
+      "error": "SKIPPED — router unreachable (connection failed). No data can be reported honestly."
+    },
+    {
+      "id": "services",
+      "title": "IP services (management exposure)",
+      "command": "/ip/service/print",
+      "connected": false,
+      "status": "connect_fail",
+      "parsedRecords": 0,
+      "sampleFields": [],
+      "durationMs": 0,
+      "lastSuccessfulSync": null,
+      "error": "SKIPPED — router unreachable (connection failed). No data can be reported honestly."
+    },
+    {
+      "id": "interface_traffic",
+      "title": "Live per-interface traffic (monitor-traffic 1s)",
+      "command": "/interface/monitor-traffic once",
+      "connected": false,
+      "status": "connect_fail",
+      "parsedRecords": 0,
+      "sampleFields": [],
+      "durationMs": 0,
+      "lastSuccessfulSync": null,
+      "error": "SKIPPED — router unreachable"
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "S01",
+      "requirement": "(engine scenario)",
+      "status": "pending",
+      "detail": "router unreachable — cannot be verified from here"
+    },
+    {
+      "id": "S02",
+      "requirement": "(engine scenario)",
+      "status": "pending",
+      "detail": "router unreachable — cannot be verified from here"
+    },
+    {
+      "id": "S03",
+      "requirement": "(engine scenario)",
+      "status": "pending",
+      "detail": "router unreachable — cannot be verified from here"
+    },
+    {
+      "id": "S04",
+      "requirement": "(engine scenario)",
+      "status": "pending",
+      "detail": "router unreachable — cannot be verified from here"
+    },
+    {
+      "id": "S05",
+      "requirement": "(engine scenario)",
+      "status": "pending",
+      "detail": "router unreachable — cannot be verified from here"
+    },
+    {
+      "id": "S06",
+      "requirement": "(engine scenario)",
+      "status": "pending",
+      "detail": "router unreachable — cannot be verified from here"
+    },
+    {
+      "id": "S07",
+      "requirement": "(engine scenario)",
+      "status": "pending",
+      "detail": "router unreachable — cannot be verified from here"
+    },
+    {
+      "id": "S08",
+      "requirement": "(engine scenario)",
+      "status": "pending",
+      "detail": "router unreachable — cannot be verified from here"
+    },
+    {
+      "id": "S09",
+      "requirement": "(engine scenario)",
+      "status": "pending",
+      "detail": "router unreachable — cannot be verified from here"
+    },
+    {
+      "id": "S10",
+      "requirement": "(engine scenario)",
+      "status": "pending",
+      "detail": "router unreachable — cannot be verified from here"
+    },
+    {
+      "id": "S11",
+      "requirement": "(engine scenario)",
+      "status": "pending",
+      "detail": "router unreachable — cannot be verified from here"
+    },
+    {
+      "id": "S12",
+      "requirement": "(engine scenario)",
+      "status": "pending",
+      "detail": "router unreachable — cannot be verified from here"
+    },
+    {
+      "id": "S13",
+      "requirement": "(engine scenario)",
+      "status": "pending",
+      "detail": "router unreachable — cannot be verified from here"
+    },
+    {
+      "id": "S14",
+      "requirement": "(engine scenario)",
+      "status": "pending",
+      "detail": "router unreachable — cannot be verified from here"
+    },
+    {
+      "id": "S15",
+      "requirement": "(engine scenario)",
+      "status": "pending",
+      "detail": "router unreachable — cannot be verified from here"
+    },
+    {
+      "id": "S16",
+      "requirement": "(engine scenario)",
+      "status": "pending",
+      "detail": "router unreachable — cannot be verified from here"
+    },
+    {
+      "id": "S17",
+      "requirement": "(engine scenario)",
+      "status": "pending",
+      "detail": "router unreachable — cannot be verified from here"
+    },
+    {
+      "id": "S18",
+      "requirement": "(engine scenario)",
+      "status": "pending",
+      "detail": "router unreachable — cannot be verified from here"
+    },
+    {
+      "id": "S19",
+      "requirement": "(engine scenario)",
+      "status": "pending",
+      "detail": "router unreachable — cannot be verified from here"
+    }
+  ],
+  "totals": {
+    "pass": 0,
+    "unsupported": 0,
+    "failed": 0,
+    "connectFailed": 34
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "name": "mtcm-agent",
+  "version": "1.0.0",
+  "private": true,
+  "description": "MikroTik Cloud Manager — outbound-only remote network agent",
+  "main": "agent.js",
+  "scripts": { "start": "node agent.js" },
+  "dependencies": { "socket.io-client": "^4.7.5" },
+  "engines": { "node": ">=18" }
+}

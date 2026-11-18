@@ -1,0 +1,37 @@
+version: "3.9"
+
+# MikroTik Cloud Manager — Network Operations edition
+# app:  Next.js + discovery scheduler (:3000)
+# realtime: socket.io push service (:3003)
+services:
+  app:
+    build: .
+    container_name: mcm-app
+    ports:
+      - "3000:3000"
+    environment:
+      - DATABASE_URL=file:/data/custom.db
+      - APP_SECRET=${APP_SECRET:-change-me-to-a-long-random-secret}
+      - AUTH_SECRET=${AUTH_SECRET:-change-me-too}
+    volumes:
+      - db-data:/data
+    restart: unless-stopped
+
+  realtime:
+    image: oven/bun:1
+    container_name: mcm-realtime
+    working_dir: /app
+    command: bun run mini-services/realtime-service/index.ts
+    environment:
+      - DATABASE_URL=file:/data/custom.db
+    volumes:
+      - db-data:/data
+      - ./:/app
+    ports:
+      - "3003:3003"
+    depends_on:
+      - app
+    restart: unless-stopped
+
+volumes:
+  db-data:

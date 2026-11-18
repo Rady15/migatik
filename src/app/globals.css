@@ -1,0 +1,284 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-app-sans);
+  --font-mono: var(--font-geist-mono);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+:root {
+  --radius: 0.75rem;
+  /* MikroTik Cloud Manager — deep navy theme (design-exact) */
+  --background: #0a1020;
+  --foreground: #f1f5f9;
+  --card: #0e1a31;
+  --card-foreground: #f1f5f9;
+  --popover: #0e1a31;
+  --popover-foreground: #f1f5f9;
+  --primary: #1685ff;
+  --primary-foreground: #ffffff;
+  --secondary: #17243b;
+  --secondary-foreground: #f1f5f9;
+  --muted: #16223a;
+  --muted-foreground: #8ca3c3;
+  --accent: #17243b;
+  --accent-foreground: #f1f5f9;
+  --destructive: #ef4444;
+  --border: rgba(96, 128, 180, 0.16);
+  --input: rgba(96, 128, 180, 0.22);
+  --ring: #1685ff;
+  --chart-1: #1685ff;
+  --chart-2: #22d3ee;
+  --chart-3: #10b981;
+  --chart-4: #f59e0b;
+  --chart-5: #ef4444;
+  --sidebar: #0a1020;
+  --sidebar-foreground: #cbd5e1;
+  --sidebar-primary: #1685ff;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #17243b;
+  --sidebar-accent-foreground: #f1f5f9;
+  --sidebar-border: rgba(96, 128, 180, 0.16);
+  --sidebar-ring: #1685ff;
+}
+
+/* light variant (via moon toggle) */
+html.light {
+  --background: #eef2f9;
+  --foreground: #0f1a30;
+  --card: #ffffff;
+  --card-foreground: #0f1a30;
+  --popover: #ffffff;
+  --popover-foreground: #0f1a30;
+  --secondary: #dde6f5;
+  --secondary-foreground: #0f1a30;
+  --muted: #e3eaf6;
+  --muted-foreground: #55688a;
+  --accent: #dde6f5;
+  --accent-foreground: #0f1a30;
+  --border: rgba(30, 64, 120, 0.14);
+  --input: rgba(30, 64, 120, 0.2);
+}
+
+html {
+  color-scheme: dark;
+}
+html.light {
+  color-scheme: light;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: "Cairo", "Segoe UI", Tahoma, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* app fonts fallback if Cairo not loaded */
+.font-app {
+  font-family: "Cairo", "Segoe UI", Tahoma, system-ui, sans-serif;
+}
+
+/* panel used across the app (matches design cards) */
+.panel {
+  background: linear-gradient(180deg, rgba(23, 37, 66, 0.75), rgba(14, 26, 49, 0.92));
+  border: 1px solid rgba(96, 128, 180, 0.16);
+  border-radius: 14px;
+}
+html.light .panel {
+  background: #ffffff;
+  border: 1px solid rgba(30, 64, 120, 0.12);
+  box-shadow: 0 2px 10px rgba(15, 26, 48, 0.06);
+}
+
+.panel-title {
+  font-weight: 700;
+  font-size: 15px;
+}
+
+/* glowing status dot */
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 9999px;
+  display: inline-block;
+}
+.dot-green {
+  background: #22c55e;
+  box-shadow: 0 0 6px 2px rgba(34, 197, 94, 0.5);
+}
+.dot-red {
+  background: #ef4444;
+  box-shadow: 0 0 6px 2px rgba(239, 68, 68, 0.45);
+}
+.dot-amber {
+  background: #f59e0b;
+  box-shadow: 0 0 6px 2px rgba(245, 158, 11, 0.45);
+}
+.dot-gray {
+  background: #64748b;
+}
+
+/* table */
+.mt-table th {
+  font-size: 11.5px;
+  color: #8ca3c3;
+  font-weight: 600;
+  padding: 9px 12px;
+  text-align: right;
+}
+html[dir="ltr"] .mt-table th,
+html[dir="ltr"] .mt-table td {
+  text-align: left;
+}
+.mt-table td {
+  font-size: 12.5px;
+  padding: 10px 12px;
+  border-top: 1px solid rgba(96, 128, 180, 0.1);
+}
+
+/* scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(96, 128, 180, 0.3);
+  border-radius: 8px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(96, 128, 180, 0.5);
+}
+
+/* map dot pulse */
+@keyframes pulse-ring {
+  0% {
+    transform: scale(1);
+    opacity: 0.8;
+  }
+  80%,
+  100% {
+    transform: scale(2.6);
+    opacity: 0;
+  }
+}
+.map-dot-pulse {
+  transform-origin: center;
+  animation: pulse-ring 2.2s cubic-bezier(0.2, 0.6, 0.4, 1) infinite;
+}
+
+/* number font */
+.num {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+/* ===== print engine ===== */
+@media print {
+  body * {
+    visibility: hidden !important;
+  }
+  .print-area,
+  .print-area * {
+    visibility: visible !important;
+  }
+  .print-area {
+    position: fixed !important;
+    inset: 0 !important;
+    background: white !important;
+    color: black;
+    overflow: visible !important;
+    z-index: 9999;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+  @page {
+    margin: 8mm;
+  }
+}
+
+.print-sheet {
+  background: white;
+  color: #111;
+}
+
+/* voucher card in print sheet */
+.voucher-card {
+  border: 1.5px dashed #94a3b8;
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: white;
+  color: #0f172a;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+.voucher-card .vc-brand {
+  font-weight: 800;
+  font-size: 13px;
+  color: #0f2b66;
+}
+.voucher-card .vc-user {
+  font-weight: 800;
+  font-size: 17px;
+  letter-spacing: 0.5px;
+  direction: ltr;
+  text-align: center;
+}
+.voucher-card .vc-pass {
+  font-weight: 700;
+  font-size: 15px;
+  direction: ltr;
+  text-align: center;
+}
+
+/* dark-friendly select/input placeholders */
+input::placeholder,
+textarea::placeholder {
+  color: rgba(140, 163, 195, 0.65);
+}

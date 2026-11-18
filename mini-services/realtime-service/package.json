@@ -1,0 +1,13 @@
+{
+  "name": "realtime-service",
+  "version": "1.0.0",
+  "private": true,
+  "description": "MikroTik Cloud Manager realtime push service (socket.io, port 3003). Polls the shared SQLite database and pushes device/stat/traffic updates to the UI. The Next.js app polls as fallback when this service is unavailable.",
+  "scripts": {
+    "dev": "bun --hot index.ts"
+  },
+  "dependencies": {
+    "socket.io": "^4.8.4",
+    "@prisma/client": "^6.11.1"
+  }
+}
