@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { serverError } from "@/lib/api-auth";
 import { withOrg } from "@/lib/tenancy";
@@ -16,21 +15,20 @@ const g = globalThis as typeof globalThis & { __mcm_metricPurged?: boolean; __mc
  * phantom numbers even when zero routers exist. Run once per process.
  */
 async function purgeOrphanDeviceData() {
-  // Bypass the org scope: legacy rows were written with organizationId="unassigned"
-  // by the scheduler, so an org-scoped purge would miss them.
   const allRouters = await db.router.findMany({ select: { id: true } });
   const validIds = new Set(allRouters.map((r) => r.id));
-  // A device user/session is an orphan when it has no router, or its router is gone.
-  const users = await db.$queryRaw<{ id: string; routerId: string | null }[]>`SELECT id, "routerId" FROM "HotspotUser"`;
-  const orphanUserIds = users.filter((u) => !u.routerId || !validIds.has(u.routerId)).map((u) => u.id);
-  const sessions = await db.$queryRaw<{ id: string; routerId: string | null }[]>`SELECT id, "routerId" FROM "HotspotSession"`;
-  const orphanSessionIds = sessions.filter((s) => !s.routerId || !validIds.has(s.routerId)).map((s) => s.id);
+  const isOrphan = (r: { routerId: string | null }) => !r.routerId || !validIds.has(r.routerId);
+
+  const users = await db.hotspotUser.findMany({ select: { id: true, routerId: true } });
+  const orphanUserIds = users.filter(isOrphan).map((u) => u.id);
+  const sessions = await db.hotspotSession.findMany({ select: { id: true, routerId: true } });
+  const orphanSessionIds = sessions.filter(isOrphan).map((s) => s.id);
 
   if (orphanSessionIds.length) {
-    await db.$executeRaw`DELETE FROM "HotspotSession" WHERE id IN (${Prisma.join(orphanSessionIds)})`;
+    await db.hotspotSession.deleteMany({ where: { id: { in: orphanSessionIds } } }).catch(() => {});
   }
   if (orphanUserIds.length) {
-    await db.$executeRaw`DELETE FROM "HotspotUser" WHERE id IN (${Prisma.join(orphanUserIds)})`;
+    await db.hotspotUser.deleteMany({ where: { id: { in: orphanUserIds } } }).catch(() => {});
   }
   return { users: orphanUserIds.length, sessions: orphanSessionIds.length };
 }

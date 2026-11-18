@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { serverError } from "@/lib/api-auth";
 import { withOrg, withOrgStrict, OrgContext } from "@/lib/tenancy";
@@ -15,20 +14,20 @@ const g = globalThis as typeof globalThis & { __mcm_orphanPkgsPurged?: boolean }
 async function purgeOrphanPackages() {
   const routers = await db.router.findMany({ select: { id: true } });
   const validIds = new Set(routers.map((r) => r.id));
-  const pkgs = await db.$queryRaw<{ id: string; routerId: string | null; description: string | null }[]>`
-    SELECT id, "routerId", description FROM "Package"`;
+  const pkgs = await db.package.findMany({ select: { id: true, routerId: true, description: true } });
   const orphans = pkgs.filter(
     (p) => p.description?.startsWith("[router-import]") && (!p.routerId || !validIds.has(p.routerId)),
   ).map((p) => p.id);
   if (!orphans.length) return 0;
-  const ids = Prisma.join(orphans);
-  await db.$executeRaw`DELETE FROM "Voucher" WHERE "packageId" IN (${ids})`.catch(() => {});
-  await db.$executeRaw`DELETE FROM "VoucherBatch" WHERE "packageId" IN (${ids})`.catch(() => {});
-  await db.$executeRaw`DELETE FROM "HotspotUser" WHERE "packageId" IN (${ids})`.catch(() => {});
-  await db.$executeRaw`DELETE FROM "Subscriber" WHERE "packageId" IN (${ids})`.catch(() => {});
-  await db.$executeRaw`DELETE FROM "Customer" WHERE "packageId" IN (${ids})`.catch(() => {});
-  await db.$executeRaw`DELETE FROM "RecurringSubscription" WHERE "packageId" IN (${ids})`.catch(() => {});
-  await db.$executeRaw`DELETE FROM "Package" WHERE id IN (${ids})`.catch(() => {});
+  const where = { id: { in: orphans } };
+  const byPkg = { packageId: { in: orphans } };
+  await db.voucher.deleteMany({ where: byPkg }).catch(() => {});
+  await db.voucherBatch.deleteMany({ where: byPkg }).catch(() => {});
+  await db.hotspotUser.deleteMany({ where: byPkg }).catch(() => {});
+  await db.subscriber.deleteMany({ where: byPkg }).catch(() => {});
+  await db.customer.deleteMany({ where: byPkg }).catch(() => {});
+  await db.recurringSubscription.deleteMany({ where: byPkg }).catch(() => {});
+  await db.package.deleteMany({ where }).catch(() => {});
   return orphans.length;
 }
 
