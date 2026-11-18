@@ -15,17 +15,17 @@ const g = globalThis as typeof globalThis & { __mcm_orphanSubsPurged?: boolean }
 async function purgeOrphanSubscribers() {
   const routers = await db.router.findMany({ select: { id: true } });
   const validIds = new Set(routers.map((r) => r.id));
-  const subs = await db.$queryRaw<{ id: string; routerId: string | null }[]>`SELECT id, "routerId" FROM Subscriber`;
+  const subs = await db.$queryRaw<{ id: string; routerId: string | null }[]>`SELECT id, "routerId" FROM "Subscriber"`;
   const orphans = subs.filter((s) => !s.routerId || !validIds.has(s.routerId)).map((s) => s.id);
   if (!orphans.length) return 0;
   const ids = Prisma.join(orphans);
   // Child rows first (most are Cascade, but be explicit across all tables).
-  await db.$executeRaw`DELETE FROM SubscriberEvent WHERE "subscriberId" IN (${ids})`.catch(() => {});
-  await db.$executeRaw`DELETE FROM RecurringSubscription WHERE "subscriberId" IN (${ids})`.catch(() => {});
-  await db.$executeRaw`DELETE FROM Invoice WHERE "subscriberId" IN (${ids})`.catch(() => {});
-  await db.$executeRaw`DELETE FROM Payment WHERE "subscriberId" IN (${ids})`.catch(() => {});
-  await db.$executeRaw`DELETE FROM CustomerTx WHERE "subscriberId" IN (${ids})`.catch(() => {});
-  await db.$executeRaw`DELETE FROM Subscriber WHERE id IN (${ids})`.catch(() => {});
+  await db.$executeRaw`DELETE FROM "SubscriberEvent" WHERE "subscriberId" IN (${ids})`.catch(() => {});
+  await db.$executeRaw`DELETE FROM "RecurringSubscription" WHERE "subscriberId" IN (${ids})`.catch(() => {});
+  await db.$executeRaw`DELETE FROM "Invoice" WHERE "subscriberId" IN (${ids})`.catch(() => {});
+  await db.$executeRaw`DELETE FROM "Payment" WHERE "subscriberId" IN (${ids})`.catch(() => {});
+  await db.$executeRaw`DELETE FROM "CustomerTx" WHERE "subscriberId" IN (${ids})`.catch(() => {});
+  await db.$executeRaw`DELETE FROM "Subscriber" WHERE id IN (${ids})`.catch(() => {});
   return orphans.length;
 }
 

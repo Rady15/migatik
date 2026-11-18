@@ -16,19 +16,19 @@ async function purgeOrphanPackages() {
   const routers = await db.router.findMany({ select: { id: true } });
   const validIds = new Set(routers.map((r) => r.id));
   const pkgs = await db.$queryRaw<{ id: string; routerId: string | null; description: string | null }[]>`
-    SELECT id, "routerId", description FROM Package`;
+    SELECT id, "routerId", description FROM "Package"`;
   const orphans = pkgs.filter(
     (p) => p.description?.startsWith("[router-import]") && (!p.routerId || !validIds.has(p.routerId)),
   ).map((p) => p.id);
   if (!orphans.length) return 0;
   const ids = Prisma.join(orphans);
-  await db.$executeRaw`DELETE FROM Voucher WHERE "packageId" IN (${ids})`.catch(() => {});
-  await db.$executeRaw`DELETE FROM VoucherBatch WHERE "packageId" IN (${ids})`.catch(() => {});
-  await db.$executeRaw`DELETE FROM HotspotUser WHERE "packageId" IN (${ids})`.catch(() => {});
-  await db.$executeRaw`DELETE FROM Subscriber WHERE "packageId" IN (${ids})`.catch(() => {});
-  await db.$executeRaw`DELETE FROM Customer WHERE "packageId" IN (${ids})`.catch(() => {});
-  await db.$executeRaw`DELETE FROM RecurringSubscription WHERE "packageId" IN (${ids})`.catch(() => {});
-  await db.$executeRaw`DELETE FROM Package WHERE id IN (${ids})`.catch(() => {});
+  await db.$executeRaw`DELETE FROM "Voucher" WHERE "packageId" IN (${ids})`.catch(() => {});
+  await db.$executeRaw`DELETE FROM "VoucherBatch" WHERE "packageId" IN (${ids})`.catch(() => {});
+  await db.$executeRaw`DELETE FROM "HotspotUser" WHERE "packageId" IN (${ids})`.catch(() => {});
+  await db.$executeRaw`DELETE FROM "Subscriber" WHERE "packageId" IN (${ids})`.catch(() => {});
+  await db.$executeRaw`DELETE FROM "Customer" WHERE "packageId" IN (${ids})`.catch(() => {});
+  await db.$executeRaw`DELETE FROM "RecurringSubscription" WHERE "packageId" IN (${ids})`.catch(() => {});
+  await db.$executeRaw`DELETE FROM "Package" WHERE id IN (${ids})`.catch(() => {});
   return orphans.length;
 }
 

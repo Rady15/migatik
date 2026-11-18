@@ -21,16 +21,16 @@ async function purgeOrphanDeviceData() {
   const allRouters = await db.router.findMany({ select: { id: true } });
   const validIds = new Set(allRouters.map((r) => r.id));
   // A device user/session is an orphan when it has no router, or its router is gone.
-  const users = await db.$queryRaw<{ id: string; routerId: string | null }[]>`SELECT id, "routerId" FROM HotspotUser`;
+  const users = await db.$queryRaw<{ id: string; routerId: string | null }[]>`SELECT id, "routerId" FROM "HotspotUser"`;
   const orphanUserIds = users.filter((u) => !u.routerId || !validIds.has(u.routerId)).map((u) => u.id);
-  const sessions = await db.$queryRaw<{ id: string; routerId: string | null }[]>`SELECT id, "routerId" FROM HotspotSession`;
+  const sessions = await db.$queryRaw<{ id: string; routerId: string | null }[]>`SELECT id, "routerId" FROM "HotspotSession"`;
   const orphanSessionIds = sessions.filter((s) => !s.routerId || !validIds.has(s.routerId)).map((s) => s.id);
 
   if (orphanSessionIds.length) {
-    await db.$executeRaw`DELETE FROM HotspotSession WHERE id IN (${Prisma.join(orphanSessionIds)})`;
+    await db.$executeRaw`DELETE FROM "HotspotSession" WHERE id IN (${Prisma.join(orphanSessionIds)})`;
   }
   if (orphanUserIds.length) {
-    await db.$executeRaw`DELETE FROM HotspotUser WHERE id IN (${Prisma.join(orphanUserIds)})`;
+    await db.$executeRaw`DELETE FROM "HotspotUser" WHERE id IN (${Prisma.join(orphanUserIds)})`;
   }
   return { users: orphanUserIds.length, sessions: orphanSessionIds.length };
 }
