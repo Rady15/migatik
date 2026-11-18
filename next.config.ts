@@ -8,10 +8,6 @@ const nextConfig: NextConfig = {
   },
   reactStrictMode: false,
   allowedDevOrigins: ["192.168.1.20", "localhost"],
-  webpackDevMiddleware: (config) => {
-    config.allowedHosts = "all";
-    return config;
-  },
 };
 
 export default nextConfig;

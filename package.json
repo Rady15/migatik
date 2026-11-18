@@ -4,8 +4,10 @@
   "private": true,
   "scripts": {
     "dev": "next dev -p 3000 -H 0.0.0.0",
-    "build": "next build && xcopy /E /I /Y .next\\static .next\\standalone\\.next\\ && xcopy /E /I /Y public .next\\standalone\\",
-    "start": "NODE_ENV=production bun .next/standalone/server.js 2>&1 | tee server.log",
+    "build": "node scripts/prisma-generate.cjs && next build",
+    "build:standalone": "next build && xcopy /E /I /Y .next\\static .next\\standalone\\.next\\ && xcopy /E /I /Y public .next\\standalone\\",
+    "start": "next start",
+    "postinstall": "node scripts/prisma-generate.cjs",
     "lint": "eslint .",
     "db:push": "prisma db push --accept-data-loss",
     "db:generate": "prisma generate",
