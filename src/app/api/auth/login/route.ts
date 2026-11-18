@@ -48,7 +48,14 @@ export async function POST(req: NextRequest) {
     res.cookies.set(SESSION_COOKIE, token, sessionCookieOptions(req));
     return res;
   } catch (e) {
-    console.error(e);
-    return NextResponse.json({ error: "خطأ في الخادم" }, { status: 500 });
+    const msg = String((e as Error).message ?? e);
+    console.error("[auth/login] failed:", msg);
+    const dbIssue = /database|prisma|table|schema|connect|env|tenant|host|ECONNREFUSED|P1001|P1002|P2025/i.test(msg);
+    return NextResponse.json({
+      error: dbIssue
+        ? "قاعدة البيانات غير جاهزة — تحقق من DATABASE_URL وتشغيل prisma db push على Vercel"
+        : "خطأ في الخادم — راجع سجلات Vercel",
+      ...(process.env.NODE_ENV !== "production" ? { detail: msg } : {}),
+    }, { status: 500 });
   }
 }
