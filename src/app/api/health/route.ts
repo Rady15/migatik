@@ -18,7 +18,7 @@ export async function GET(req: Request) {
   try {
     // Use Unsafe here: Supabase transaction pooler (pgbouncer) does not support
     // named prepared statements reused across pooled connections (error 42P05).
-    await db.$executeRawUnsafe("SELECT 1");
+    await db.$queryRawUnsafe("SELECT 1");
     dbConnected = true;
   } catch (e) {
     message = String((e as Error).message ?? e);
