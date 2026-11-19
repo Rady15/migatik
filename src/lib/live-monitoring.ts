@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import { withRouterRow } from "@/lib/router-transport";
 import { runCommand } from "@/lib/routeros";
+import { markVouchersUsedByUsernames } from "@/lib/voucher-lifecycle";
 
 /**
  * Live monitoring data comes straight from the router — the old DB tables
@@ -64,7 +65,15 @@ export async function readLiveMonitoring(routerIds?: string[]): Promise<LiveMoni
   for (const router of routers) {
     const res = await withRouterRow(router, async (conn) => {
       const active = await runCommand(conn, ["/ip/hotspot/active/print"]);
-      if (!active.ok) return { active, traffic: null };
+      if (!active.ok) return { active, traffic: null, usedUsers: [] as string[] };
+
+      // Hotspot users that already consumed data/uptime — a card can be "used"
+      // without an active session right now (phone disconnected, router rebooted).
+      const userList = await runCommand(conn, ["/ip/hotspot/user/print"]);
+      const usedUsers = (userList.ok ? userList.data : [])
+        .filter((u) => parseUptime(u.uptime) > 0 || Number(u["bytes-in"] ?? 0) > 0 || Number(u["bytes-out"] ?? 0) > 0)
+        .map((u) => (u.name ?? "").trim())
+        .filter((n): n is string => n.length > 0);
 
       // Per-interface real bits-per-second.
       const ifaces = await runCommand(conn, ["/interface/print"]);
@@ -97,7 +106,7 @@ export async function readLiveMonitoring(routerIds?: string[]): Promise<LiveMoni
           tx += Number(d.txMbps ?? 0);
         }
       }
-      return { active, traffic: { rx, tx } };
+      return { active, traffic: { rx, tx }, usedUsers };
     });
 
     if (!res.ok || !res.value) {
@@ -106,6 +115,14 @@ export async function readLiveMonitoring(routerIds?: string[]): Promise<LiveMoni
     }
 
     const active = res.value.active;
+    // Reflect real usage on the Cards page: any hotspot user that has uptime or
+    // traffic (this list also includes currently-connected users) marks its
+    // voucher as activated, so a card used on a phone never stays "unused".
+    const activeNames = active.ok ? active.data.map((r) => (r.user ?? "").trim()).filter(Boolean) : [];
+    const usedNames = [...activeNames, ...(res.value.usedUsers ?? [])];
+    if (usedNames.length > 0) {
+      await markVouchersUsedByUsernames(router.id, usedNames).catch(() => {});
+    }
     if (!active.ok) {
       out.errors.push(`${router.name || router.host}: ${active.error ?? "فشل قراءة الجلسات"}`);
     } else {

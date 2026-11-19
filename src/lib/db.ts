@@ -23,6 +23,33 @@ const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
 };
 
+/**
+ * Transient connectivity failures (Supabase pooler / network blips) surface as
+ * these Prisma error codes. Retrying a couple of times turns a user-visible 500
+ * into a successful request.
+ */
+const TRANSIENT_DB_CODES = new Set(["P1001", "P1002", "P1008", "P1017", "P2024", "P2028", "P2037"]);
+
+function isTransientDbError(e: unknown): boolean {
+  const code = (e as { code?: string } | null)?.code;
+  return typeof code === "string" && TRANSIENT_DB_CODES.has(code);
+}
+
+async function withDbRetry<T>(run: () => Promise<T>, attempts = 3): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    try {
+      return await run();
+    } catch (e) {
+      lastError = e;
+      if (!isTransientDbError(e) || attempt === attempts - 1) throw e;
+      // 250ms → 500ms backoff; the pooler usually recovers instantly.
+      await new Promise((resolve) => setTimeout(resolve, 250 * 2 ** attempt));
+    }
+  }
+  throw lastError;
+}
+
 function buildClient(): PrismaClient {
   const client = new PrismaClient({ log: ["error", "warn"] });
   return client.$extends({
@@ -31,7 +58,7 @@ function buildClient(): PrismaClient {
         async $allOperations({ model, operation, args, query }) {
           const ctx = getTenantCtx();
           if (!model || !TENANT_MODELS.has(model) || !ctx || ctx.isPlatform) {
-            return query(args);
+            return withDbRetry(() => query(args));
           }
           const a = (args ?? {}) as Record<string, unknown>;
           const orgId = ctx.organizationId;
@@ -61,7 +88,7 @@ function buildClient(): PrismaClient {
               break;
             }
           }
-          return query(a);
+          return withDbRetry(() => query(a));
         },
       },
     },
