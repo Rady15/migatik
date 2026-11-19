@@ -20,7 +20,7 @@ import { authFetch } from "@/lib/store";
  * - Behind the Caddy gateway (any other port) → use the XTransformPort rewrite.
  */
 function socketTarget(): { url: string; opts: IoOptions } {
-  const opts: IoOptions = { path: "/", reconnectionAttempts: 5, timeout: 4000 };
+  const opts: IoOptions = { path: "/", reconnectionAttempts: 2, timeout: 3000 };
   const explicit = process.env.NEXT_PUBLIC_REALTIME_URL;
   if (explicit) return { url: explicit, opts: { ...opts, auth: {} } };
   if (typeof window !== "undefined") {
@@ -95,6 +95,16 @@ export function useRealtime(opts: UseRealtimeOptions = {}) {
     if (!enabled) return;
     let disposed = false;
     let fallbackTimer: ReturnType<typeof setTimeout> | null = null;
+
+    // On public deployments (Tailscale Funnel / tunnels) port 3003 is not exposed,
+    // so skip the socket entirely and go straight to HTTP polling (no console spam).
+    if (process.env.NEXT_PUBLIC_SKIP_SOCKET === "1") {
+      startPolling();
+      return () => {
+        disposed = true;
+        if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+      };
+    }
 
     const startPolling = () => {
       if (disposed || pollRef.current) return;
