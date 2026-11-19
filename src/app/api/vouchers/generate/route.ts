@@ -29,7 +29,11 @@ export const POST = withOrgStrict(async (req: NextRequest, ctx: OrgContext & { e
   try {
     const b = await req.json();
     const count = Math.max(1, Math.min(5000, Number(b.count) || 10));
-    const prefix = String(b.prefix || "MK").replace(/\s/g, "");
+    // Prefix is optional: an explicitly empty prefix means "no prefix" (the code
+    // itself is the username/password, so nothing extra is printed on the card).
+    // Only a missing field falls back to "MK".
+    const rawPrefix = b.prefix === undefined || b.prefix === null ? "MK" : String(b.prefix);
+    const prefix = rawPrefix.replace(/\s/g, "").slice(0, 10);
     const usernameLength = Math.max(4, Math.min(12, Number(b.usernameLength) || 6));
     const passwordLength = Math.max(3, Math.min(12, Number(b.passwordLength) || 4));
     const mode = b.mode === "sequential" ? "sequential" : "random";

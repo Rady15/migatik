@@ -342,7 +342,14 @@ export function VouchersView() {
               })()}
             </div>
             <DlgField label={t("count")} value={form.count} onChange={(v) => setForm({ ...form, count: v })} dir="ltr" type="number" />
-            <DlgField label="Prefix" value={form.prefix} onChange={(v) => setForm({ ...form, prefix: v })} dir="ltr" />
+            <div>
+              <DlgField label={lang === "ar" ? "البادئة (Prefix)" : "Prefix"} value={form.prefix} onChange={(v) => setForm({ ...form, prefix: v })} dir="ltr" placeholder="MK" />
+              <p className="mt-1 text-[10px] text-[#64748B] leading-relaxed">
+                {lang === "ar"
+                  ? "البادئة تُضاف قبل كل كود (مثلاً MK123456). اتركها فارغة تماماً إذا أردت أن يكون الكود نفسه فقط بدون بادئة على الكارت."
+                  : "The prefix is prepended to every code (e.g. MK123456). Leave it empty to print the bare code on the card."}
+              </p>
+            </div>
             <DlgField label={lang === "ar" ? "طول اسم المستخدم" : "Username length"} value={form.usernameLength} onChange={(v) => setForm({ ...form, usernameLength: v })} dir="ltr" type="number" />
             {form.authMode !== "pin" && form.authMode !== "username_only" && (
               <DlgField label={lang === "ar" ? "طول كلمة المرور" : "Password length"} value={form.passwordLength} onChange={(v) => setForm({ ...form, passwordLength: v })} dir="ltr" type="number" />

@@ -35,7 +35,7 @@ function isTransientDbError(e: unknown): boolean {
   return typeof code === "string" && TRANSIENT_DB_CODES.has(code);
 }
 
-async function withDbRetry<T>(run: () => Promise<T>, attempts = 3): Promise<T> {
+async function withDbRetry<T>(run: () => Promise<T>, attempts = 5): Promise<T> {
   let lastError: unknown;
   for (let attempt = 0; attempt < attempts; attempt++) {
     try {
@@ -43,8 +43,8 @@ async function withDbRetry<T>(run: () => Promise<T>, attempts = 3): Promise<T> {
     } catch (e) {
       lastError = e;
       if (!isTransientDbError(e) || attempt === attempts - 1) throw e;
-      // 250ms → 500ms backoff; the pooler usually recovers instantly.
-      await new Promise((resolve) => setTimeout(resolve, 250 * 2 ** attempt));
+      // 300ms → 750ms → 1.5s → 3s: rides out short Supabase pooler/network blips.
+      await new Promise((resolve) => setTimeout(resolve, [300, 750, 1500, 3000][attempt] ?? 3000));
     }
   }
   throw lastError;
