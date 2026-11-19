@@ -23,7 +23,7 @@
 /interface/bridge/port add bridge=docker-bridge interface=veth-tailscale
 
 # --- 3) environment variables (REPLACE the auth key!) ---
-/container/envs/add name=ts-env key=TS_AUTHKEY value="tskey-auth-REPLACE-ME"
+/container/envs/add name=ts-env key=TS_AUTHKEY value="tskey-auth-kJ4rpNPqtm11CNTRL-PmUFrgiKAaLsyQKRkFpAaLzZQ7KY5e2g"
 /container/envs/add name=ts-env key=TS_HOSTNAME value="mikrotik-chr"
 /container/envs/add name=ts-env key=TS_ROUTES value="192.168.1.0/24"
 /container/envs/add name=ts-env key=TS_EXTRA_ARGS value="--netfilter-mode=off --accept-routes"
