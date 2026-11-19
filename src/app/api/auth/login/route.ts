@@ -53,8 +53,8 @@ export async function POST(req: NextRequest) {
     const dbIssue = /database|prisma|table|schema|connect|env|tenant|host|ECONNREFUSED|P1001|P1002|P2025/i.test(msg);
     return NextResponse.json({
       error: dbIssue
-        ? "قاعدة البيانات غير جاهزة — تحقق من DATABASE_URL وتشغيل prisma db push على Vercel"
-        : "خطأ في الخادم — راجع سجلات Vercel",
+        ? "تعذّر الوصول لقاعدة البيانات — تحقق من الاتصال بالإنترنت وحالة مشروع Supabase ثم أعد المحاولة"
+        : "خطأ في الخادم — راجع سجلات الخادم",
       ...(process.env.NODE_ENV !== "production" ? { detail: msg } : {}),
     }, { status: 500 });
   }

@@ -96,16 +96,6 @@ export function useRealtime(opts: UseRealtimeOptions = {}) {
     let disposed = false;
     let fallbackTimer: ReturnType<typeof setTimeout> | null = null;
 
-    // On public deployments (Tailscale Funnel / tunnels) port 3003 is not exposed,
-    // so skip the socket entirely and go straight to HTTP polling (no console spam).
-    if (process.env.NEXT_PUBLIC_SKIP_SOCKET === "1") {
-      startPolling();
-      return () => {
-        disposed = true;
-        if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
-      };
-    }
-
     const startPolling = () => {
       if (disposed || pollRef.current) return;
       setMode("polling");
@@ -132,6 +122,17 @@ export function useRealtime(opts: UseRealtimeOptions = {}) {
       poll();
       pollRef.current = setInterval(poll, pollDevicesMs);
     };
+
+    // On public deployments (Tailscale Funnel / tunnels) port 3003 is not exposed,
+    // so skip the socket entirely and go straight to HTTP polling (no console spam).
+    // NOTE: must come AFTER startPolling is defined (const is not hoisted).
+    if (process.env.NEXT_PUBLIC_SKIP_SOCKET === "1") {
+      startPolling();
+      return () => {
+        disposed = true;
+        if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+      };
+    }
 
     // try socket.io (direct :3003 in dev, gateway rewrite in production)
     try {
