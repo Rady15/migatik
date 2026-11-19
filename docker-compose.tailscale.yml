@@ -1,0 +1,81 @@
+version: "3.9"
+
+# =============================================================================
+#  MikroTik Cloud Manager — self-hosted on Proxmox (Tailscale edition)
+#  No VPS, no domain, no port-forward needed.
+#
+#  Internet -> https://mcm-platform.<tailnet>.ts.net  (Tailscale Funnel)
+#            -> app :3000  (host network)
+#            -> (tailnet 100.x) -> MikroTik CHR :8728
+#
+#  Usage:
+#    1) cp .env.example .env   (fill DATABASE_URL, APP_SECRET, TS_AUTHKEY)
+#    2) docker compose -f docker-compose.tailscale.yml up -d --build
+#    3) wait ~30s for auth, then: docker exec mcm-ts-funnel tailscale funnel 3000
+#    4) open https://mcm-platform.<your-tailnet>.ts.net
+# =============================================================================
+
+services:
+  # ---- Next.js app (API + UI + discovery scheduler) ----
+  app:
+    build: .
+    container_name: mcm-app
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - APP_SECRET=${APP_SECRET}
+      - AUTH_SECRET=${AUTH_SECRET:-${APP_SECRET}}
+      - HOSTNAME=0.0.0.0
+      - REALTIME_URL=http://realtime:3003
+      - BRIDGE_TOKEN=${BRIDGE_TOKEN}
+      - PUBLIC_PLATFORM_URL=${PUBLIC_PLATFORM_URL:-https://mcm-platform.ts.net}
+      - PUBLIC_AGENT_URL=${PUBLIC_AGENT_URL:-}
+    ports:
+      - "3000:3000"
+    depends_on:
+      - realtime
+    volumes:
+      - db-data:/data
+
+  # ---- Realtime / agent tunnel bridge (socket.io :3003) ----
+  realtime:
+    image: oven/bun:1
+    container_name: mcm-realtime
+    working_dir: /app
+    command: bun run mini-services/realtime-service/index.ts
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - APP_SECRET=${APP_SECRET}
+      - BRIDGE_TOKEN=${BRIDGE_TOKEN}
+    volumes:
+      - ./:/app
+    ports:
+      - "3003:3003"
+
+  # ---- Tailscale Funnel: public HTTPS URL, no domain/port-forward ----
+  # Generate an auth key (Settings -> Keys) at https://login.tailscale.com/admin/settings/keys
+  # Set TS_AUTHKEY in .env before starting.
+  ts-funnel:
+    image: tailscale/tailscale:latest
+    container_name: mcm-ts-funnel
+    hostname: mcm-platform
+    restart: unless-stopped
+    network_mode: host
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    volumes:
+      - ts-funnel-state:/var/lib/tailscale
+    environment:
+      - TS_AUTHKEY=${TS_AUTHKEY}
+      - TS_STATE_DIR=/var/lib/tailscale
+      - TS_HOSTNAME=mcm-platform
+    depends_on:
+      - app
+
+volumes:
+  db-data:
+  ts-funnel-state:
