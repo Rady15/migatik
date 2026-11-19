@@ -64,3 +64,32 @@ docker exec mcm-ts-funnel tailscale funnel 3000
 - الـ Funnel عام (أي حد عنده الرابط يقدر يفتح اللوحة) → حط كلمة مرور قوية لـ `admin`.
 - لو حابب تدخل بس من أجهزتك: استخدم `tailscale serve 3000` بدل `funnel` (داخل الـ tailnet بس).
 - الراوتر والمنصة في نفس الـ tailnet → الاتصال مش محتاج أي IP عام أو منفذ مفتوح.
+
+---
+
+## استكشاف الأعطال
+
+### أخطاء 500 متكررة «Can't reach database server … supabase.com:6543»
+ده **مش عطل في Supabase** في الغالب — بعض مزوّدي الإنترنت (زي TE Data في مصر) بيرجّعوا
+`Server failed` (SERVFAIL) لنطاق `supabase.com` بالكامل، بينما المواقع التانية بتفتح عادي.
+
+اتأكد بالأمر ده (من PowerShell):
+
+```powershell
+Resolve-DnsName aws-1-eu-west-1.pooler.supabase.com -Type A
+Resolve-DnsName aws-1-eu-west-1.pooler.supabase.com -Type A -Server 1.1.1.1
+```
+
+لو الأول فشل والتاني نجح → غيّر DNS الجهاز (مرة واحدة، ويفضل بعد إعادة التشغيل):
+
+```powershell
+# PowerShell كمسؤول
+Set-DnsClientServerAddress -InterfaceAlias "Ethernet" -ServerAddresses ("1.1.1.1","8.8.8.8","9.9.9.9")
+Clear-DnsClientCache
+```
+
+بعدها `npm run build` مش مطلوب — يكفي التأكد إن `/api/health` رجّع `ready`.
+
+> بالإضافة لذلك، طبقة قاعدة البيانات فيها إعادة محاولة تلقائية (5 محاولات / ~5.5 ثانية)
+> لأخطاء الاتصال المؤقتة `P1001/P1002/P2024/P2028`، فانقطاعات اللحظات مش هتظهر للمستخدم.
+
