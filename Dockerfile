@@ -16,6 +16,10 @@ WORKDIR /app
 ENV NODE_ENV=production DATABASE_URL="file:/data/custom.db"
 RUN apt-get update && apt-get install -y --no-install-recommends sqlite3 && rm -rf /var/lib/apt/lists/*
 COPY --from=build /app ./
+# Next.js standalone does not bundle static/public — copy them in (cross-platform)
+RUN mkdir -p .next/standalone/.next && \
+    cp -r .next/static .next/standalone/.next/static && \
+    cp -r public .next/standalone/public
 VOLUME ["/data"]
 EXPOSE 3000
-CMD ["sh", "-c", "bunx prisma db push --skip-generate && bun .next/standalone/server.js"]
+CMD ["sh", "-c", "bunx prisma db push --skip-generate && node .next/standalone/server.js"]

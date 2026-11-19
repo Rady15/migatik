@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev -p 3000 -H 0.0.0.0",
-    "build": "node scripts/prisma-generate.cjs && next build",
+    "build": "node scripts/prisma-generate.cjs && next build && node scripts/copy-standalone-assets.cjs",
     "build:standalone": "next build && xcopy /E /I /Y .next\\static .next\\standalone\\.next\\ && xcopy /E /I /Y public .next\\standalone\\",
     "start": "next start",
     "postinstall": "node scripts/prisma-generate.cjs",
