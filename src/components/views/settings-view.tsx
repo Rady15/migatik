@@ -301,6 +301,7 @@ export function SettingsView({ user }: { user: { id: string; name: string; role:
             onClick={() => {
               const next = document.documentElement.classList.contains("light") ? "dark" : "light";
               document.documentElement.classList.toggle("light", next === "light");
+              try { localStorage.setItem("mtcm_theme", next); } catch { /* private mode */ }
               setSettings({ ...settings, theme: next });
             }}
             className="text-[#CBD5E1] hover:bg-[#17243B] text-xs gap-2 border border-[#24344F]"

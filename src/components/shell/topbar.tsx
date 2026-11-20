@@ -31,6 +31,14 @@ export function Topbar({ user, onLogout }: { user: { name: string; role: string 
   const [openLang, setOpenLang] = useState(false);
   const [light, setLight] = useState(false);
   const [installEvt, setInstallEvt] = useState<BeforeInstallPromptEvent | null>(null);
+
+  // Restore the theme chosen with the toggle (or from Settings) after a reload.
+  useEffect(() => {
+    const saved = localStorage.getItem("mtcm_theme");
+    const isLight = saved === "light" || document.documentElement.classList.contains("light");
+    setLight(isLight);
+    document.documentElement.classList.toggle("light", isLight);
+  }, []);
   const [busy, setBusy] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -79,6 +87,8 @@ export function Topbar({ user, onLogout }: { user: { name: string; role: string 
     const next = !light;
     setLight(next);
     document.documentElement.classList.toggle("light", next);
+    try { localStorage.setItem("mtcm_theme", next ? "light" : "dark"); } catch { /* private mode */ }
+    void api("/api/settings", { method: "PUT", json: { theme: next ? "light" : "dark" } }).catch(() => {});
   }
 
   async function install() {
