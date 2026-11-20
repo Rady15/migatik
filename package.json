@@ -12,6 +12,7 @@
     "db:push": "prisma db push --accept-data-loss",
     "db:push:prod": "prisma db push --accept-data-loss --schema=prisma/schema.prod.prisma",
     "db:seed:minimal": "tsx scripts/seed-minimal.ts",
+    "db:backfill:voucher-sales": "tsx scripts/backfill-voucher-sales.ts",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:reset": "prisma migrate reset"

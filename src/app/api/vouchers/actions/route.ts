@@ -4,6 +4,7 @@ import { badRequest, serverError } from "@/lib/api-auth";
 import { withOrgStrict, OrgContext } from "@/lib/tenancy";
 import { withRouterRow } from "@/lib/router-transport";
 import { removeVoucherUser, setVoucherUserDisabled, upsertVoucherUser, formatLimitUptime } from "@/lib/voucher-actions";
+import { ensureVoucherSale } from "@/lib/voucher-sales";
 
 /**
  * Actions for existing cards/batches. Every router-backed action is applied on
@@ -189,6 +190,10 @@ export const POST = withOrgStrict(async (req: NextRequest, ctx: OrgContext & { e
           if (Object.keys(data).length) {
             await db.voucher.update({ where: { id }, data });
             changed++;
+          }
+          // A sold/activated card is money in: invoice + payment + ledger (idempotent).
+          if (action === "mark_sold" || action === "activate" || action === "reactivate") {
+            await ensureVoucherSale(id).catch(() => {});
           }
         }
 

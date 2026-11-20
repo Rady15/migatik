@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { withRouterRow } from "@/lib/router-transport";
 import { runCommand } from "@/lib/routeros";
 import { setVoucherUserDisabled } from "@/lib/voucher-actions";
+import { ensureVoucherSale } from "@/lib/voucher-sales";
 
 /**
  * Voucher lifecycle automation.
@@ -42,10 +43,12 @@ export async function markVouchersUsedByUsernames(routerId: string, usernames: s
   if (wanted.size === 0) return 0;
 
   const pending = await db.voucher.findMany({
-    where: { routerId, status: { in: ["unused", "sold", "pending_sync"] } },
+    where: { routerId, status: { in: ["unused", "sold", "pending_sync", "activated"] } },
     select: {
       id: true,
       username: true,
+      soldAt: true,
+      activatedAt: true,
       expiresAt: true,
       batch: { select: { validityHours: true } },
       package: { select: { durationHours: true } },
@@ -62,12 +65,16 @@ export async function markVouchersUsedByUsernames(routerId: string, usernames: s
       .update({
         where: { id: v.id },
         data: {
-          status: "activated",
-          activatedAt: now,
+          // A card that was really used is a SOLD card: the customer paid for it.
+          status: "sold",
+          soldAt: v.soldAt ?? now,
+          activatedAt: v.activatedAt ?? now,
           expiresAt: v.expiresAt ?? new Date(now.getTime() + hours * 3600_000),
         },
       })
       .catch(() => {});
+    // Record the money once (invoice + payment + ledger); no-op if already done.
+    await ensureVoucherSale(v.id).catch(() => {});
   }
   return matches.length;
 }
