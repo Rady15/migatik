@@ -12,7 +12,8 @@ import { hashPassword } from "../src/lib/crypto";
 const db = new PrismaClient();
 const ORG_CODE = "migatik";
 const USERNAME = "admin";
-const PASSWORD = "admin123";
+// Password for a NEW admin. Set ADMIN_PASSWORD to avoid the well-known default.
+const PASSWORD = process.env.ADMIN_PASSWORD || "admin123";
 
 async function main() {
   // Organization (idempotent)
@@ -46,12 +47,13 @@ async function main() {
     });
     console.log(`✓ admin created: ${USERNAME} / ${PASSWORD}`);
   } else {
-    // Ensure it can log in and is linked to the org
+    // Never reset an existing password: re-running the seed must not undo a
+    // password change performed from the UI.
     await db.adminUser.update({
       where: { id: existing.id },
-      data: { active: true, passwordHash: hashPassword(PASSWORD), organizationId: org.id, role: "SUPER_ADMIN" },
+      data: { active: true, organizationId: org.id, role: "SUPER_ADMIN" },
     });
-    console.log(`✓ admin already exists — password reset to ${PASSWORD}`);
+    console.log(`✓ admin already exists — password left unchanged`);
   }
 
   console.log("DONE — you can now log in and connect your first router.");

@@ -158,7 +158,7 @@ const dict = {
   passwordLogin: { ar: "كلمة المرور", en: "Password" },
   signIn: { ar: "دخول", en: "Sign In" },
   invalidCreds: { ar: "بيانات الدخول غير صحيحة", en: "Invalid credentials" },
-  demoCreds: { ar: "بيانات الدخول الافتراضية: admin / admin123", en: "Default credentials: admin / admin123" },
+  demoCreds: { ar: "استخدم بيانات دخولك الشخصية", en: "Use your own account credentials" },
   // ===== Network Devices (v2) =====
   devices: { ar: "الأجهزة والاكتشاف", en: "Network Devices" },
   networkMap: { ar: "خريطة الشبكة", en: "Network Map" },

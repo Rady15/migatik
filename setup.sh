@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+﻿#!/usr/bin/env bash
 # MikroTik Cloud Manager — one-shot local setup
 # Prepares .env, installs dependencies, generates Prisma client, verifies DB.
 set -euo pipefail
@@ -82,7 +82,7 @@ cat <<DONE
 ----------------------------------------------
  تطوير:      $RUNTIME run dev        → http://localhost:3000
  إنتاج:      $RUNTIME run build && $RUNTIME run start
- الدخول:     admin / admin123   (غيّرها فوراً)
+ الدخول:     admin / ADMIN_PASSWORD   (غيّرها فوراً)
 ----------------------------------------------
  الـ Agent (على Linux بجوار الراوتر — ليس داخل MikroTik):
  curl -fsSL "http://IP-المنصة:3000/api/agents/bootstrap?code=<كود-التسجيل>" | bash

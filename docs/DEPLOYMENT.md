@@ -10,7 +10,7 @@ bun run scripts/seed-demo-devices.ts         # optional: clearly-labeled DEMO da
 bun run dev &                                # Next.js on :3000 (starts discovery scheduler)
 bun run mini-services/realtime-service/index.ts &   # socket.io on :3003
 ```
-Login: `admin / admin123` (change immediately from Settings).
+Login: `admin` + the password you set (`ADMIN_PASSWORD` at seed time; change it from Settings right after the first login).
 
 ## Docker Compose (all-in-one)
 

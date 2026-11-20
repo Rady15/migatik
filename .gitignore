@@ -60,3 +60,6 @@ server.log
 *.db-journal
 *.db-wal
 *.db-shm
+# runtime logs (start.ps1) and local build output
+logs/
+

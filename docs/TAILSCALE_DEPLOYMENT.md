@@ -1,4 +1,4 @@
-#ربط الميكروتك بالمنصة عبر Tailscale (بدون VPS / Domain / Port Forward)
+﻿#ربط الميكروتك بالمنصة عبر Tailscale (بدون VPS / Domain / Port Forward)
 
 ##الفكرة
 بدل ما المنصة (Vercel) تحاول توصل للراوتر (وراء NAT)، وهو ده اللي كان بيفشل، بنخلي **المنصة والراوتر في نفس شبكة Tailscale** (100.x.x.x).المنصة تشتغل على الـ Proxmox بتاعك (مجاناً)، وTailscale Funnel بيديلك رابط HTTPS عام من غير ما تشتري domain.
@@ -93,3 +93,38 @@ Clear-DnsClientCache
 > بالإضافة لذلك، طبقة قاعدة البيانات فيها إعادة محاولة تلقائية (5 محاولات / ~5.5 ثانية)
 > لأخطاء الاتصال المؤقتة `P1001/P1002/P2024/P2028`، فانقطاعات اللحظات مش هتظهر للمستخدم.
 
+## Auto-start on Windows (survives reboot)
+
+`start.ps1` loads `.env`, starts the standalone server on `0.0.0.0:3000` with
+`NEXT_PUBLIC_SKIP_SOCKET=1`, and restarts it automatically if it exits. Output
+goes to `logs/server.log` (rotated at 5 MB, git-ignored).
+
+A Scheduled Task runs it hidden at logon:
+
+```powershell
+$user = "$env:USERDOMAIN\$env:USERNAME"
+$root = "C:\path\to\project"
+
+Register-ScheduledTask -TaskName "MikroTik Cloud Manager" `
+  -Action (New-ScheduledTaskAction -Execute "powershell.exe" `
+    -Argument "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$root\start.ps1`"" `
+    -WorkingDirectory $root) `
+  -Trigger (New-ScheduledTaskTrigger -AtLogOn -User $user) `
+  -Settings (New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
+    -StartWhenAvailable -ExecutionTimeLimit ([TimeSpan]::Zero) -RestartCount 3 `
+    -RestartInterval (New-TimeSpan -Minutes 1) -MultipleInstances IgnoreNew) `
+  -Principal (New-ScheduledTaskPrincipal -UserId $user -LogonType Interactive -RunLevel Limited) -Force
+```
+
+Manual control:
+
+```powershell
+Start-ScheduledTask   -TaskName "MikroTik Cloud Manager"
+Stop-ScheduledTask    -TaskName "MikroTik Cloud Manager"
+Get-ScheduledTaskInfo -TaskName "MikroTik Cloud Manager"
+Get-Content .\logs\server.log -Tail 30
+```
+
+> The task fires at user logon, so enable automatic logon (or log in once after a
+> reboot) for the site to come back up on its own. `start.ps1` also refuses to
+> start a second copy when port 3000 is already in use.

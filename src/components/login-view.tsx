@@ -13,8 +13,8 @@ interface OrgBrand {
 const BRAND_KEY = "mtcm_brand";
 
 export function LoginView({ onSuccess }: { onSuccess: (u: { id: string; name: string; role: string }) => void }) {
-  const [username, setUsername] = useState("admin");
-  const [password, setPassword] = useState("admin123");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [brand, setBrand] = useState<OrgBrand | null>(null);
@@ -123,10 +123,6 @@ export function LoginView({ onSuccess }: { onSuccess: (u: { id: string; name: st
             دخول
           </button>
         </form>
-
-        <div className="mt-5 text-center text-[11px] text-[#64748B] border border-[#24344F]/60 rounded-lg py-2">
-          بيانات الدخول الافتراضية: <span className="text-[#8CA3C3] font-mono" dir="ltr">admin / admin123</span>
-        </div>
       </div>
     </div>
   );
