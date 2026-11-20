@@ -3,9 +3,14 @@ import { db } from "@/lib/db";
 import { serverError } from "@/lib/api-auth";
 import { withOrg } from "@/lib/tenancy";
 import { voucherCredential } from "@/lib/voucher-auth";
+import { syncVoucherUsage } from "@/lib/voucher-lifecycle";
 
 export const GET = withOrg(async (req: NextRequest) => {
   try {
+    // A card used on a phone must not stay "unused" just because the admin is
+    // on this page instead of the dashboard. Throttled inside the helper.
+    await syncVoucherUsage().catch(() => {});
+
     const sp = req.nextUrl.searchParams;
     const batchId = sp.get("batchId");
     const status = sp.get("status");

@@ -9,6 +9,7 @@ export async function register(): Promise<void> {
   ensureScheduler();
   const { ensureSaasScheduler } = await import("@/lib/saas-scheduler");
   ensureSaasScheduler();
-  const { ensureVoucherScheduler } = await import("@/lib/voucher-lifecycle");
+  const { ensureVoucherScheduler, ensureVoucherUsageSyncScheduler } = await import("@/lib/voucher-lifecycle");
   ensureVoucherScheduler();
+  ensureVoucherUsageSyncScheduler();
 }

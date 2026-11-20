@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { withRouterRow } from "@/lib/router-transport";
+import { withRouterRow, type RouterLike } from "@/lib/router-transport";
 import { runCommand } from "@/lib/routeros";
 import { setVoucherUserDisabled } from "@/lib/voucher-actions";
 import { ensureVoucherSale } from "@/lib/voucher-sales";
@@ -77,6 +77,107 @@ export async function markVouchersUsedByUsernames(routerId: string, usernames: s
     await ensureVoucherSale(v.id).catch(() => {});
   }
   return matches.length;
+}
+
+function parseRouterUptime(value?: string): number {
+  if (!value) return 0;
+  let sec = 0;
+  const re = /(\d+)(w|d|h|m|s)/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(value))) {
+    const n = Number(m[1]);
+    const mult = m[2] === "w" ? 604800 : m[2] === "d" ? 86400 : m[2] === "h" ? 3600 : m[2] === "m" ? 60 : 1;
+    sec += n * mult;
+  }
+  return sec;
+}
+
+export interface UsageSyncResult {
+  routers: number;
+  changed: number;
+  errors: string[];
+}
+
+/**
+ * Ask one router for real hotspot usage and mark the matching cards as sold.
+ * A card counts as used when it has a live session, uptime or any traffic in
+ * `/ip/hotspot/user/print` (phone may disconnect after the first login).
+ */
+export async function syncVoucherUsageForRouter(router: RouterLike): Promise<{ changed: number; error?: string }> {
+  const res = await withRouterRow(router, async (conn) => {
+    const active = await runCommand(conn, ["/ip/hotspot/active/print"]);
+    const users = await runCommand(conn, ["/ip/hotspot/user/print"]);
+    const names: string[] = [];
+
+    for (const row of (active.ok ? active.data : []) as Record<string, unknown>[]) {
+      const name = String(row.user ?? "").trim();
+      if (name) names.push(name);
+    }
+    for (const u of (users.ok ? users.data : []) as Record<string, unknown>[]) {
+      const used =
+        parseRouterUptime(String(u.uptime ?? "")) > 0 ||
+        Number(u["bytes-in"] ?? 0) > 0 ||
+        Number(u["bytes-out"] ?? 0) > 0;
+      if (!used) continue;
+      const name = String(u.name ?? "").trim();
+      if (name) names.push(name);
+    }
+    return names;
+  });
+
+  if (!res.ok || !res.value) return { changed: 0, error: res.error ?? "تعذر قراءة الراوتر" };
+  if (res.value.length === 0) return { changed: 0 };
+  const changed = await markVouchersUsedByUsernames(router.id, res.value);
+  return { changed };
+}
+
+let lastUsageSync = 0;
+let usageSyncInflight: Promise<UsageSyncResult> | null = null;
+
+/** Sync every real router. Throttled so opening the cards page is cheap. */
+export async function syncVoucherUsage(options?: { force?: boolean; minIntervalMs?: number }): Promise<UsageSyncResult> {
+  const minInterval = options?.minIntervalMs ?? 15_000;
+  const now = Date.now();
+  if (!options?.force && now - lastUsageSync < minInterval) {
+    return { routers: 0, changed: 0, errors: [] };
+  }
+  if (usageSyncInflight) return usageSyncInflight;
+
+  lastUsageSync = now;
+  usageSyncInflight = (async () => {
+    const routers = await db.router.findMany({
+      where: { isDemo: false },
+      select: {
+        id: true, name: true, host: true, apiPort: true, apiSslPort: true, useTls: true,
+        apiUsername: true, apiPasswordEnc: true, connectionMethod: true, agentId: true,
+      },
+    });
+    const out: UsageSyncResult = { routers: routers.length, changed: 0, errors: [] };
+    for (const router of routers) {
+      try {
+        const r = await syncVoucherUsageForRouter(router);
+        out.changed += r.changed;
+        if (r.error) out.errors.push(`${router.name}: ${r.error}`);
+      } catch (e) {
+        out.errors.push(`${router.name}: ${(e as Error).message}`);
+      }
+    }
+    return out;
+  })().finally(() => {
+    usageSyncInflight = null;
+  });
+  return usageSyncInflight;
+}
+
+/** Background job: detect real usage every minute, even if nobody opens a page. */
+export function ensureVoucherUsageSyncScheduler(): void {
+  const g = globalThis as unknown as { __mcm_voucher_usage_sync?: ReturnType<typeof setInterval> };
+  if (g.__mcm_voucher_usage_sync) return;
+  console.log("[vouchers] usage sync scheduler started (every 1 min)");
+  setTimeout(() => { void syncVoucherUsage({ force: true }).catch(() => {}); }, 10_000);
+  g.__mcm_voucher_usage_sync = setInterval(() => {
+    void syncVoucherUsage({ force: true }).catch((e) => console.error("[vouchers] usage sync error:", (e as Error).message));
+  }, 60_000);
 }
 
 export interface ExpireResult {
