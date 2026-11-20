@@ -282,3 +282,159 @@ input::placeholder,
 textarea::placeholder {
   color: rgba(140, 163, 195, 0.65);
 }
+/* ================================================================
+   LIGHT THEME — full override layer.
+   The UI uses ~950 hard-coded dark-mode colour utilities. These
+   attribute selectors remap every one of them when <html> has the
+   .light class, so text never ends up the same colour as its panel.
+   ================================================================ */
+
+html.light {
+  color-scheme: light;
+  --background: #f2f6fc; --foreground: #0f1a30;
+  --card: #ffffff; --card-foreground: #0f1a30;
+  --popover: #ffffff; --popover-foreground: #0f1a30;
+  --primary: #0b63d6; --primary-foreground: #ffffff;
+  --secondary: #eaf1fb; --secondary-foreground: #0f1a30;
+  --muted: #eaf1fb; --muted-foreground: #64748b;
+  --accent: #eaf1fb; --accent-foreground: #0f1a30;
+  --border: #d8e3f1; --input: #d8e3f1;
+  --destructive: #b91c1c;
+  --sidebar: #ffffff; --sidebar-foreground: #334155;
+  --sidebar-primary: #0b63d6; --sidebar-accent: #eaf1fb;
+  --sidebar-accent-foreground: #0f1a30; --sidebar-border: #d8e3f1;
+  --chart-1: #0b63d6; --chart-2: #0e7490; --chart-3: #047857;
+  --chart-4: #b45309; --chart-5: #b91c1c;
+}
+
+/* --- hard-coded hex backgrounds --- */
+html.light [class*="bg-[#0B1428]"] { background-color: #ffffff !important; }
+html.light [class*="bg-[#0E1A31]"] { background-color: #ffffff !important; }
+html.light [class*="bg-[#111C30]"] { background-color: #ffffff !important; }
+html.light [class*="bg-[#111C33]"] { background-color: #ffffff !important; }
+html.light [class*="bg-[#0A1020]"] { background-color: #ffffff !important; }
+html.light [class*="bg-[#101B31]"] { background-color: #ffffff !important; }
+html.light [class*="bg-[#121E38]"] { background-color: #ffffff !important; }
+html.light [class*="bg-[#14213A]"] { background-color: #ffffff !important; }
+html.light [class*="bg-[#0D1528]"] { background-color: #ffffff !important; }
+html.light [class*="bg-[#141F38]"] { background-color: #ffffff !important; }
+html.light [class*="bg-[#131F38]"] { background-color: #ffffff !important; }
+html.light [class*="bg-[#10203A]"] { background-color: #ffffff !important; }
+html.light [class*="bg-[#060D1B]"] { background-color: #ffffff !important; }
+html.light [class*="bg-[#050B16]"] { background-color: #ffffff !important; }
+html.light [class*="bg-[#13223C]"] { background-color: #ffffff !important; }
+html.light [class*="bg-[#050B18]"] { background-color: #ffffff !important; }
+html.light [class*="bg-[#17243B]"] { background-color: #eaf1fb !important; }
+html.light [class*="bg-[#1B2946]"] { background-color: #eaf1fb !important; }
+html.light [class*="bg-[#223351]"] { background-color: #eaf1fb !important; }
+html.light [class*="bg-[#24344F]"] { background-color: #eaf1fb !important; }
+html.light [class*="bg-[#2E4260]"] { background-color: #eaf1fb !important; }
+html.light [class*="bg-[#2A1520]"] { background-color: #fdecec !important; }
+html.light [class*="bg-[#64748B]"] { background-color: #94a3b8 !important; }
+
+/* --- hard-coded hex text --- */
+html.light [class*="text-[#8CA3C3]"] { color: #64748b !important; }
+html.light [class*="text-[#64748B]"] { color: #64748b !important; }
+html.light [class*="text-[#CBD5E1]"] { color: #0f1a30 !important; }
+html.light [class*="text-[#F1F5F9]"] { color: #0f1a30 !important; }
+html.light [class*="text-[#E2E8F0]"] { color: #0f1a30 !important; }
+html.light [class*="text-[#4C5F80]"] { color: #64748b !important; }
+html.light [class*="text-[#7E93B4]"] { color: #64748b !important; }
+html.light [class*="text-[#5B7194]"] { color: #64748b !important; }
+html.light [class*="text-[#94A9C9]"] { color: #64748b !important; }
+html.light [class*="text-[#94A3B8]"] { color: #64748b !important; }
+html.light [class*="text-[#D9E4F5]"] { color: #334155 !important; }
+html.light [class*="text-[#55688A]"] { color: #334155 !important; }
+html.light [class*="text-[#33415580]"] { color: #64748b !important; }
+html.light [class*="text-[#0A1020]"] { color: #0f1a30 !important; }
+html.light [class*="text-[#0B3B8C]"] { color: #0b3b8c !important; }
+html.light [class*="text-[#22D3EE]"] { color: #0e7490 !important; }
+html.light [class*="text-[#67E8F9]"] { color: #0e7490 !important; }
+html.light [class*="text-[#7DD3FC]"] { color: #0369a1 !important; }
+html.light [class*="text-[#1685FF]"] { color: #0b63d6 !important; }
+html.light [class*="text-[#5CA9FF]"] { color: #0366d6 !important; }
+html.light [class*="text-[#7DB6FF]"] { color: #0366d6 !important; }
+html.light [class*="text-[#10B981]"] { color: #047857 !important; }
+html.light [class*="text-[#34D399]"] { color: #047857 !important; }
+html.light [class*="text-[#8B5CF6]"] { color: #6d28d9 !important; }
+html.light [class*="text-[#A78BFA]"] { color: #6d28d9 !important; }
+html.light [class*="text-[#9F8CFF]"] { color: #6d28d9 !important; }
+html.light [class*="text-[#F59E0B]"] { color: #b45309 !important; }
+html.light [class*="text-[#FBBF24]"] { color: #b45309 !important; }
+html.light [class*="text-[#EF4444]"] { color: #b91c1c !important; }
+html.light [class*="text-[#FCA5A5]"] { color: #b91c1c !important; }
+
+/* --- hard-coded hex borders --- */
+html.light [class*="border-[#1B2946]"] { border-color: #d8e3f1 !important; }
+html.light [class*="border-[#24344F]"] { border-color: #d8e3f1 !important; }
+html.light [class*="border-[#0A1020]"] { border-color: #d8e3f1 !important; }
+html.light [class*="border-[#2E4166]"] { border-color: #d8e3f1 !important; }
+
+/* --- standard Tailwind utilities --- */
+html.light [class*="text-white"] { color: #0f1a30 !important; }
+html.light [class*="text-slate-200"] { color: #334155 !important; }
+html.light [class*="text-slate-300"] { color: #334155 !important; }
+html.light [class*="text-slate-400"] { color: #64748b !important; }
+html.light [class*="text-emerald-200"] { color: #047857 !important; }
+html.light [class*="text-emerald-300"] { color: #047857 !important; }
+html.light [class*="text-emerald-400"] { color: #047857 !important; }
+html.light [class*="text-red-200"] { color: #b91c1c !important; }
+html.light [class*="text-red-300"] { color: #b91c1c !important; }
+html.light [class*="text-red-400"] { color: #b91c1c !important; }
+html.light [class*="text-red-50"] { color: #b91c1c !important; }
+html.light [class*="text-amber-200"] { color: #b45309 !important; }
+html.light [class*="text-amber-300"] { color: #b45309 !important; }
+html.light [class*="text-amber-400"] { color: #b45309 !important; }
+html.light [class*="text-orange-300"] { color: #b45309 !important; }
+html.light [class*="text-orange-400"] { color: #b45309 !important; }
+html.light [class*="text-blue-300"] { color: #0b63d6 !important; }
+html.light [class*="text-blue-400"] { color: #0b63d6 !important; }
+html.light [class*="text-sky-200"] { color: #0369a1 !important; }
+html.light [class*="text-sky-300"] { color: #0369a1 !important; }
+html.light [class*="text-sky-400"] { color: #0369a1 !important; }
+html.light [class*="text-cyan-400"] { color: #0e7490 !important; }
+html.light [class*="text-violet-200"] { color: #6d28d9 !important; }
+html.light [class*="text-violet-300"] { color: #6d28d9 !important; }
+html.light [class*="text-violet-400"] { color: #6d28d9 !important; }
+html.light [class*="bg-emerald-950"] { background-color: #e7f7ef !important; }
+html.light [class*="bg-red-950"] { background-color: #fdecec !important; }
+html.light [class*="bg-red-900"] { background-color: #fbdada !important; }
+html.light [class*="bg-red-800"] { background-color: #f7cccc !important; }
+html.light [class*="bg-amber-950"] { background-color: #fff6e5 !important; }
+html.light [class*="border-emerald-700"] { border-color: #86efac !important; }
+html.light [class*="border-emerald-800"] { border-color: #bbf7d0 !important; }
+html.light [class*="border-red-800"] { border-color: #fecaca !important; }
+html.light [class*="border-red-700"] { border-color: #fca5a5 !important; }
+html.light [class*="border-amber-800"] { border-color: #fde68a !important; }
+html.light [class*="border-slate-400"] { border-color: #cbd5e1 !important; }
+html.light [class*="border-slate-500"] { border-color: #94a3b8 !important; }
+
+/* --- keep white text on coloured buttons/badges --- */
+html.light :is([class*="bg-[#1685FF]"], [class*="bg-[#3B97FF]"], [class*="bg-[#EF4444]"], [class*="bg-[#F59E0B]"], [class*="bg-[#F87171]"], [class*="bg-[#0FA36B]"], [class*="bg-[#12BE80]"], [class*="bg-[#22D3EE]"], [class*="bg-[#10B981]"], [class*="bg-[#8B5CF6]"], [class*="bg-[#5B3FD6]"], [class*="from-[#1685FF]"], [class*="from-[#5B3FD6]"], [class*="from-[#0FA36B]"], [class*="from-[#0A8F62]"], [class*="from-[#2E82FF]"], [class*="from-[#1D5FD6]"], [class*="from-[#6C50E6]"], [class*="from-[#C9680C]"], [class*="from-[#4A33A6]"], [class*="from-[#4A94FF]"], [class*="from-[#3B97FF]"], [class*="from-[#12BE80]"], .bg-emerald-500, .bg-emerald-600, .bg-red-500, .bg-red-600, .bg-red-700, .bg-red-800, .bg-red-900, .bg-amber-500, .bg-amber-600, .bg-sky-600, .bg-blue-600, .bg-blue-500, .bg-orange-500, .bg-orange-600, .bg-slate-600, .bg-slate-500, .bg-black):is([class*="text-white"], [class*="text-[#F1F5F9]"], [class*="text-[#E2E8F0]"]) { color: #ffffff !important; }
+html.light :is([class*="bg-[#1685FF]"], [class*="bg-[#3B97FF]"], [class*="bg-[#EF4444]"], [class*="bg-[#F59E0B]"], [class*="bg-[#F87171]"], [class*="bg-[#0FA36B]"], [class*="bg-[#12BE80]"], [class*="bg-[#22D3EE]"], [class*="bg-[#10B981]"], [class*="bg-[#8B5CF6]"], [class*="bg-[#5B3FD6]"], [class*="from-[#1685FF]"], [class*="from-[#5B3FD6]"], [class*="from-[#0FA36B]"], [class*="from-[#0A8F62]"], [class*="from-[#2E82FF]"], [class*="from-[#1D5FD6]"], [class*="from-[#6C50E6]"], [class*="from-[#C9680C]"], [class*="from-[#4A33A6]"], [class*="from-[#4A94FF]"], [class*="from-[#3B97FF]"], [class*="from-[#12BE80]"], .bg-emerald-500, .bg-emerald-600, .bg-red-500, .bg-red-600, .bg-red-700, .bg-red-800, .bg-red-900, .bg-amber-500, .bg-amber-600, .bg-sky-600, .bg-blue-600, .bg-blue-500, .bg-orange-500, .bg-orange-600, .bg-slate-600, .bg-slate-500, .bg-black) :is([class*="text-white"], [class*="text-[#F1F5F9]"], [class*="text-[#E2E8F0]"]) { color: #ffffff !important; }
+
+/* --- structural light surfaces --- */
+html.light .panel { background: #ffffff !important; }
+html.light .panel { border-color: #d8e3f1 !important; }
+html.light .mt-table th { color: #64748b !important; }
+html.light .mt-table td { border-color: #d8e3f1 !important; }
+html.light [role="application"] { background: #f8fafc !important; }
+
+/* Recharts tooltips carry hard-coded dark inline styles in several views. */
+html.light .recharts-tooltip-wrapper > div,
+html.light .recharts-tooltip-wrapper .recharts-default-tooltip {
+  background: #ffffff !important;
+  border-color: #d8e3f1 !important;
+  color: #0f1a30 !important;
+  box-shadow: 0 6px 20px rgba(15, 26, 48, 0.12) !important;
+}
+html.light .recharts-tooltip-wrapper .recharts-tooltip-label,
+html.light .recharts-tooltip-wrapper .recharts-tooltip-item,
+html.light .recharts-tooltip-wrapper li,
+html.light .recharts-tooltip-wrapper span {
+  color: #0f1a30 !important;
+}
+html.light input::placeholder, html.light textarea::placeholder { color: #94a3b8 !important; }
+html.light ::-webkit-scrollbar-thumb { background: #cbd5e1 !important; }
+html.light ::-webkit-scrollbar-thumb:hover { background: #94a3b8 !important; }
+
