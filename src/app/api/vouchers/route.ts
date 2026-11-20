@@ -33,13 +33,20 @@ export const GET = withOrg(async (req: NextRequest) => {
       db.voucherBatch.findMany({ where: routerId && routerId !== "all" ? { routerId } : {}, orderBy: { createdAt: "desc" }, include: { package: { select: { name: true } }, router: { select: { name: true } } } }),
     ]);
     const stats = await db.voucher.groupBy({ by: ["status"], where, _count: true });
+    // Overall figures for the summary strip (the `stats` above follow the
+    // current status/search filters and would otherwise give wrong totals).
+    const allStats = await db.voucher.groupBy({
+      by: ["status"],
+      where: routerId && routerId !== "all" ? { routerId } : {},
+      _count: true,
+    });
     // credentials are decrypted server-side for the authenticated admin view only
     // (at rest the DB stores AES-256-GCM encrypted values for v3 rows)
     const safeVouchers = vouchers.map((v) => ({
       ...v,
       password: v.authMode === "username_only" ? "" : voucherCredential(v),
     }));
-    return NextResponse.json({ total, page, pageSize, vouchers: safeVouchers, batches, stats });
+    return NextResponse.json({ total, page, pageSize, vouchers: safeVouchers, batches, stats, allStats });
   } catch (e) {
     return serverError(e);
   }

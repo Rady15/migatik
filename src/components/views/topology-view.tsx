@@ -171,14 +171,57 @@ export function TopologyView() {
     return { nodes: withEdges, edges: topo.edges, width: maxW, height: Math.max(maxLevel, 600), totalW: maxW };
   }, [topo]);
 
-  // auto-fit the canvas when the topology first becomes available
+  // Center the whole map inside the visible canvas (both axes), not top-left.
+  const fitView = useCallback(() => {
+    const el = canvasRef.current;
+    if (!el || layout.width <= 0) return;
+    const pad = 12;
+    // The map wrapper is layout.width+200 / height+200 — use the same numbers
+    // here or the computed centre is off by 100px on each axis.
+    const W = layout.width + 200;
+    const H = layout.height + 200;
+    const z = Math.min(
+      (el.clientWidth - pad * 2) / W,
+      (el.clientHeight - pad * 2) / H,
+      1.2,
+    );
+    const nextZoom = Math.max(0.15, Math.min(2.5, z));
+    setZoom(nextZoom);
+    setPan({
+      x: (el.clientWidth - W * nextZoom) / 2,
+      y: (el.clientHeight - H * nextZoom) / 2,
+    });
+  }, [layout.width, layout.height]);
+
+  // Auto-fit once per router/topology and whenever the canvas is resized.
+  useEffect(() => { fitDoneRef.current = false; }, [routerId]);
   useEffect(() => {
-    if (topo && topo.nodes.length > 0 && !fitDoneRef.current) {
-      fitDoneRef.current = true;
-      const id = requestAnimationFrame(() => fitView());
-      return () => cancelAnimationFrame(id);
-    }
-  }, [topo]);
+    if (!topo || topo.nodes.length === 0 || fitDoneRef.current) return;
+    fitDoneRef.current = true;
+    const id = requestAnimationFrame(() => fitView());
+    return () => cancelAnimationFrame(id);
+  }, [topo, fitView]);
+  useEffect(() => {
+    const el = canvasRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => { if (fitDoneRef.current) fitView(); });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [fitView]);
+
+  // Native non-passive wheel listener: React's onWheel is passive, so
+  // preventDefault() there does not stop the whole page from scrolling.
+  useEffect(() => {
+    const el = canvasRef.current;
+    if (!el) return;
+    const onWheelNative = (e: WheelEvent) => {
+      e.preventDefault();
+      const factor = e.deltaY < 0 ? 1.12 : 0.89;
+      setZoom((z) => Math.max(0.15, Math.min(2.5, z * factor)));
+    };
+    el.addEventListener("wheel", onWheelNative, { passive: false });
+    return () => el.removeEventListener("wheel", onWheelNative);
+  }, []);
 
   // ---------- stats chips (CoreBit-style) ----------
   const stats = useMemo(() => {
@@ -199,11 +242,6 @@ export function TopologyView() {
   const leftList = useMemo(() => (hidePlaced ? [] : filteredDevices), [hidePlaced, filteredDevices]);
 
   // ---------- interactions ----------
-  const onWheel = (e: React.WheelEvent) => {
-    e.preventDefault();
-    const factor = e.deltaY < 0 ? 1.12 : 0.89;
-    setZoom((z) => Math.min(2.5, Math.max(0.15, z * factor)));
-  };
   const onPointerDown = (e: React.PointerEvent) => {
     if ((e.target as HTMLElement).closest("[data-node]")) return;
     dragRef.current = { x: e.clientX, y: e.clientY, panX: pan.x, panY: pan.y };
@@ -214,14 +252,6 @@ export function TopologyView() {
     setPan({ x: dragRef.current.panX + (e.clientX - dragRef.current.x), y: dragRef.current.panY + (e.clientY - dragRef.current.y) });
   };
   const onPointerUp = () => { dragRef.current = null; };
-
-  const fitView = () => {
-    const el = canvasRef.current;
-    if (!el || layout.width <= 0) return;
-    const z = Math.min((el.clientWidth - 40) / layout.width, 1.2);
-    setZoom(Math.max(0.15, z));
-    setPan({ x: 20, y: 20 });
-  };
 
   const scan = async () => {
     setSyncing(true);
@@ -343,9 +373,9 @@ export function TopologyView() {
   const allEdges = useMemo(() => [...(layout.edges ?? []), ...interRouterLinks], [layout.edges, interRouterLinks]);
 
   return (
-    <div className="space-y-3">
+    <div className="flex h-[calc(100dvh-210px)] min-h-[360px] flex-col gap-3 overflow-hidden lg:h-[calc(100dvh-150px)]">
       {/* toolbar */}
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex shrink-0 flex-wrap items-center gap-2">
         <h2 className="text-[15px] font-extrabold text-white flex items-center gap-2">
           <Network className="w-4.5 h-4.5 text-[#22D3EE]" />
           {t("topologyTitle")}
@@ -398,22 +428,22 @@ export function TopologyView() {
       </div>
 
       {toast && (
-        <Alert className={`!py-2 ${toast.ok ? "border-emerald-700/50 bg-emerald-950/30" : "border-red-800/50 bg-red-950/30"}`}>
+        <Alert className={`shrink-0 !py-2 ${toast.ok ? "border-emerald-700/50 bg-emerald-950/30" : "border-red-800/50 bg-red-950/30"}`}>
           <AlertDescription className={`text-[12px] ${toast.ok ? "text-emerald-300" : "text-red-300"}`} dir="auto">{toast.msg}</AlertDescription>
         </Alert>
       )}
 
       {topo?.unreachable && (
-        <Alert className="!py-2 border-amber-800/50 bg-amber-950/20">
+        <Alert className="shrink-0 !py-2 border-amber-800/50 bg-amber-950/20">
           <AlertDescription className="text-[11.5px] text-amber-300 flex items-center gap-1.5" dir="auto">
             <AlertTriangle className="w-3.5 h-3.5 shrink-0" />{t("routerOfflineNote")}
           </AlertDescription>
         </Alert>
       )}
 
-      <div className="flex gap-3 items-stretch">
+      <div className="flex min-h-0 flex-1 gap-3 items-stretch">
         {/* left panel */}
-        <div className="panel p-3 w-56 shrink-0 hidden md:flex flex-col max-h-[560px]">
+        <div className="panel p-3 w-56 shrink-0 hidden md:flex h-full min-h-0 flex-col">
           <div className="text-[11px] font-bold text-[#CBD5E1] mb-2 flex items-center justify-between" dir="ltr">
             <span>IP Addresses ({filteredDevices.filter((d) => d.ip).length})</span>
           </div>
@@ -439,14 +469,14 @@ export function TopologyView() {
         {/* canvas */}
         <div
           ref={canvasRef}
-          className="panel flex-1 relative overflow-hidden cursor-grab active:cursor-grabbing min-h-[560px]"
+          className="panel relative min-h-0 flex-1 overflow-hidden cursor-grab active:cursor-grabbing"
           style={{ background: "radial-gradient(ellipse at 50% 0%, #0D1A32 0%, #0A1020 70%)" }}
-          onWheel={onWheel}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
           role="application"
           aria-label="network topology map"
+          dir="ltr"
         >
           {loading && !topo ? (
             <div className="absolute inset-0 flex items-center justify-center"><Loader2 className="w-6 h-6 animate-spin text-[#1685FF]" /></div>

@@ -81,7 +81,7 @@ export function AppShell({ user, onLogout }: { user: AppUser; onLogout: () => vo
 
       <div className="flex flex-1 min-h-0">
         {/* desktop sidebar */}
-        <aside className="hidden lg:flex w-[200px] shrink-0 flex-col border-l border-[#1B2946]/70 bg-[#0A1020] no-print">
+        <aside className="hidden lg:flex h-dvh w-[200px] shrink-0 flex-col border-l border-[#1B2946]/70 bg-[#0A1020] no-print">
           <Sidebar activeView={activeView} />
         </aside>
 

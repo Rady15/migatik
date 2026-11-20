@@ -29,6 +29,36 @@ interface Batch {
 }
 interface Pkg { id: string; name: string; price: number; durationHours: number; downloadMbps: number; uploadMbps: number; profile: string }
 interface Rtr { id: string; name: string; status: string }
+interface Usage {
+  uptime?: string; uptimeSec: number; bytesIn: number; bytesOut: number;
+  active: boolean; disabled: boolean; profile?: string;
+}
+interface ConsumptionItem {
+  id: string; username: string; serial: string; status: string;
+  price: number; currency: string; soldAt: string | null; activatedAt: string | null; expiresAt: string | null;
+  router?: { name: string } | null; package?: { name: string } | null; usage: Usage | null;
+}
+interface Consumption {
+  items: ConsumptionItem[];
+  totals: { used: number; revenue: number; connected: number };
+  errors?: string[]; fetchedAt: string;
+}
+
+function fmtBytes(bytes?: number): string {
+  const n = Number(bytes ?? 0);
+  if (n <= 0) return "—";
+  if (n >= 1024 ** 3) return `${(n / 1024 ** 3).toFixed(2)} GB`;
+  if (n >= 1024 ** 2) return `${(n / 1024 ** 2).toFixed(1)} MB`;
+  if (n >= 1024) return `${(n / 1024).toFixed(0)} KB`;
+  return `${n} B`;
+}
+
+function fmtDuration(sec?: number): string {
+  const s = Number(sec ?? 0);
+  if (s <= 0) return "—";
+  const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60);
+  return [d ? `${d}d` : "", h ? `${h}h` : "", m ? `${m}m` : ""].filter(Boolean).join(" ") || `${s}s`;
+}
 
 const AUTH_MODE_OPTIONS = [
   { value: "user_pass", ar: "اسم مستخدم + كلمة مرور", en: "Username + Password" },
@@ -46,7 +76,8 @@ const emptyGen = {
 export function VouchersView() {
   const lang = useApp((s) => s.lang);
   const t = makeT(lang);
-  const [data, setData] = useState<{ total: number; vouchers: Voucher[]; batches: Batch[]; stats: { status: string; _count: number }[] } | null>(null);
+  const [data, setData] = useState<{ total: number; vouchers: Voucher[]; batches: Batch[]; stats: { status: string; _count: number }[]; allStats: { status: string; _count: number }[] } | null>(null);
+  const [consumption, setConsumption] = useState<Consumption | null>(null);
   const [pkgs, setPkgs] = useState<Pkg[]>([]);
   const [routers, setRouters] = useState<Rtr[]>([]);
   const [search, setSearch] = useState("");
@@ -63,15 +94,32 @@ export function VouchersView() {
 
   const pageSize = 15;
 
+  const overallStats = data?.allStats ?? [];
+  const statusCount = (s: string) => overallStats.find((x) => x.status === s)?._count ?? 0;
+  const issuedCards = overallStats.reduce((n, s) => n + s._count, 0);
+  const usedCards = ["sold", "activated", "expired"].reduce((n, s) => n + statusCount(s), 0);
+  const remainingCards = statusCount("unused");
+
   const load = useCallback(() => {
-    api<{ total: number; vouchers: Voucher[]; batches: Batch[]; stats: { status: string; _count: number }[] }>(
+    api<{ total: number; vouchers: Voucher[]; batches: Batch[]; stats: { status: string; _count: number }[]; allStats: { status: string; _count: number }[] }>(
       `/api/vouchers?search=${encodeURIComponent(search)}&status=${statusF}&batchId=${batchF}&routerId=${routerId}&page=${page}&pageSize=${pageSize}`,
     )
       .then(setData)
       .catch((e) => toast.error((e as Error).message));
   }, [search, statusF, batchF, routerId, page]);
 
+  const loadConsumption = useCallback(() => {
+    api<Consumption>(`/api/vouchers/consumption?routerId=${routerId}`)
+      .then(setConsumption)
+      .catch(() => {});
+  }, [routerId]);
+
   useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    loadConsumption();
+    const timer = setInterval(loadConsumption, 30_000);
+    return () => clearInterval(timer);
+  }, [loadConsumption]);
   useEffect(() => {
     api<{ packages: Pkg[] }>("/api/packages").then((d) => setPkgs(d.packages)).catch(() => {});
     api<{ routers: Rtr[] }>("/api/routers").then((d) => setRouters(d.routers)).catch(() => {});
@@ -98,6 +146,7 @@ export function VouchersView() {
       }
       setGenOpen(false);
       load();
+      loadConsumption();
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -115,6 +164,7 @@ export function VouchersView() {
       if (res.ok) toast.success(res.message);
       else toast.warning(res.message);
       load();
+      loadConsumption();
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -170,6 +220,93 @@ export function VouchersView() {
           })}
         </div>
       )}
+
+      {/* issued / used / remaining summary */}
+      {data && (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+          <div className="panel p-3 flex items-center justify-between border-e-2 border-e-[#1685FF]/60">
+            <div>
+              <div className="text-[11px] font-bold text-[#8CA3C3]">{lang === "ar" ? "الكروت اللي طلعت" : "Cards issued"}</div>
+              <div className="text-[10px] text-[#64748B] mt-0.5">{lang === "ar" ? "إجمالي الكروت المنتجة" : "All generated cards"}</div>
+            </div>
+            <span className="text-sky-300 font-extrabold text-xl num" dir="ltr">{fmtNum(issuedCards)}</span>
+          </div>
+          <div className="panel p-3 flex items-center justify-between border-e-2 border-e-emerald-500/60">
+            <div>
+              <div className="text-[11px] font-bold text-[#8CA3C3]">{lang === "ar" ? "المستخدم منها" : "Used cards"}</div>
+              <div className="text-[10px] text-emerald-300/80 mt-0.5 num" dir="ltr">
+                {fmtMoney(consumption?.totals.revenue ?? 0)} · {fmtNum(consumption?.totals.connected ?? 0)} {lang === "ar" ? "متصل الآن" : "online"}
+              </div>
+            </div>
+            <span className="text-emerald-300 font-extrabold text-xl num" dir="ltr">{fmtNum(usedCards)}</span>
+          </div>
+          <div className="panel p-3 flex items-center justify-between border-e-2 border-e-slate-500/60">
+            <div>
+              <div className="text-[11px] font-bold text-[#8CA3C3]">{lang === "ar" ? "المتبقي" : "Remaining"}</div>
+              <div className="text-[10px] text-[#64748B] mt-0.5">{lang === "ar" ? "جاهزة للبيع" : "available to sell"}</div>
+            </div>
+            <span className="text-slate-200 font-extrabold text-xl num" dir="ltr">{fmtNum(remainingCards)}</span>
+          </div>
+        </div>
+      )}
+
+      {/* full consumption ledger */}
+      <div className="panel overflow-hidden">
+        <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-[#1B2946] flex-wrap">
+          <h2 className="text-sm font-extrabold text-white flex items-center gap-2">
+            <Wifi className="w-4 h-4 text-emerald-300" />
+            {lang === "ar" ? "استهلاك الكروت بالكامل" : "Full card consumption"}
+          </h2>
+          <span className="text-[10px] text-[#64748B]">
+            {consumption ? `${fmtNum(consumption.totals.used)} ${lang === "ar" ? "كرت مستخدم" : "used cards"} · ${lang === "ar" ? "آخر تحديث" : "updated"} ${new Date(consumption.fetchedAt).toLocaleTimeString(lang === "ar" ? "ar-EG" : "en-GB")}` : "…"}
+          </span>
+        </div>
+        {consumption?.errors?.length ? (
+          <div className="px-4 py-2 text-[10px] text-amber-300/90">{consumption.errors.slice(0, 2).join(" | ")}</div>
+        ) : null}
+        <div className="overflow-x-auto">
+          <table className="mt-table w-full min-w-[820px]">
+            <thead>
+              <tr>
+                <th>{lang === "ar" ? "الكرت" : "Card"}</th>
+                <th>{lang === "ar" ? "الباقة" : "Package"}</th>
+                <th>{t("status")}</th>
+                <th>{lang === "ar" ? "تاريخ البيع" : "Sold at"}</th>
+                <th>{lang === "ar" ? "الصلاحية تنتهي" : "Expires"}</th>
+                <th>{lang === "ar" ? "مدة الاستخدام" : "Used time"}</th>
+                <th>{lang === "ar" ? "التحميل" : "Download"}</th>
+                <th>{lang === "ar" ? "الرفع" : "Upload"}</th>
+                <th>{lang === "ar" ? "الحالة الآن" : "Live state"}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {!consumption || consumption.items.length === 0 ? (
+                <tr><td colSpan={9} className="text-center text-[#64748B] py-6">{t("noData")}</td></tr>
+              ) : consumption.items.map((c) => (
+                <tr key={c.id} className="hover:bg-[#121E38]/70 transition-colors">
+                  <td className="font-bold text-[#E2E8F0] num" dir="ltr">{c.username}</td>
+                  <td className="text-[#CBD5E1]">{c.package?.name ?? "—"}</td>
+                  <td><StatusPill status={c.status} lang={lang} /></td>
+                  <td className="num text-[#8CA3C3]" dir="ltr">{c.soldAt ? fmtDate(c.soldAt) : "—"}</td>
+                  <td className="num text-[#8CA3C3]" dir="ltr">{c.expiresAt ? fmtDate(c.expiresAt) : "—"}</td>
+                  <td className="num text-[#E2E8F0]" dir="ltr">{c.usage ? fmtDuration(c.usage.uptimeSec) : "—"}</td>
+                  <td className="num text-[#22D3EE]" dir="ltr">{c.usage ? fmtBytes(c.usage.bytesIn) : "—"}</td>
+                  <td className="num text-[#22D3EE]" dir="ltr">{c.usage ? fmtBytes(c.usage.bytesOut) : "—"}</td>
+                  <td>
+                    {c.usage?.active ? (
+                      <span className="text-[10px] font-bold text-emerald-300">{lang === "ar" ? "متصل الآن" : "Online"}</span>
+                    ) : c.usage?.disabled ? (
+                      <span className="text-[10px] font-bold text-red-300">{lang === "ar" ? "معطّل" : "Disabled"}</span>
+                    ) : (
+                      <span className="text-[10px] text-[#64748B]">{c.usage ? (lang === "ar" ? "انتهت الجلسة" : "Idle") : "—"}</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
 
       {/* batches */}
       <div className="panel p-4">
