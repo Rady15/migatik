@@ -2,8 +2,9 @@
 
 /**
  * Unified consumption view: CURRENT (live RouterOS session/host counters +
- * last sampled rate) and TOTAL (all-time device daily totals / router user
- * counters) for every device and every Hotspot user, in one place.
+ * last sampled rate) and TOTAL (the router's cumulative per-user counters)
+ * for every device and every Hotspot user, in one place.
+ * Byte values are MiB/GiB, exactly as RouterOS reports them.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -26,11 +27,11 @@ interface Totals {
   users: number;
   onlineDevices: number;
   activeSessions: number;
-  currentDownMb: number;
-  currentUpMb: number;
-  totalDownMb: number;
-  totalUpMb: number;
-  userTotalMb: number;
+  currentDownMib: number;
+  currentUpMib: number;
+  totalDownMib: number;
+  totalUpMib: number;
+  userTotalMib: number;
 }
 interface Payload {
   devices: ConsumptionDevice[];
@@ -42,7 +43,7 @@ interface Payload {
 
 const EMPTY: Payload = {
   devices: [], users: [],
-  totals: { devices: 0, users: 0, onlineDevices: 0, activeSessions: 0, currentDownMb: 0, currentUpMb: 0, totalDownMb: 0, totalUpMb: 0, userTotalMb: 0 },
+  totals: { devices: 0, users: 0, onlineDevices: 0, activeSessions: 0, currentDownMib: 0, currentUpMib: 0, totalDownMib: 0, totalUpMib: 0, userTotalMib: 0 },
   errors: [], fetchedAt: "",
 };
 
@@ -100,13 +101,14 @@ export function ConsumptionView() {
   const exportCsv = () => {
     const isDev = tab === "devices";
     const head = isDev
-      ? ["Device", "MAC", "IP", "Router", "Status", "Current down (MB)", "Current up (MB)", "Rate down (Mbps)", "Rate up (Mbps)", "Total down (MB)", "Total up (MB)", "Total (MB)"]
-      : ["User", "Name", "Router", "Status", "Active", "Current down (MB)", "Current up (MB)", "Uptime (s)", "Total (MB)", "Limit (MB)"];
+      ? ["Device", "MAC", "IP", "Router", "Status", "Current down (MiB)", "Current up (MiB)", "Rate down (Mbps)", "Rate up (Mbps)", "Total down (MiB)", "Total up (MiB)", "Total (MiB)", "Total source"]
+      : ["User", "Name", "Router", "Status", "Active", "Current down (MiB)", "Current up (MiB)", "Session uptime (s)", "Total down (MiB)", "Total up (MiB)", "Total (MiB)", "Total uptime (s)", "Packets in", "Packets out", "Limit (MiB)"];
     const rows = isDev
-      ? deviceRows.map((d) => [d.name, d.mac, d.ip ?? "", d.routerName, d.status, d.currentDownMb, d.currentUpMb,
-          d.rateDownMbps.toFixed(3), d.rateUpMbps.toFixed(3), d.totalDownMb.toFixed(2), d.totalUpMb.toFixed(2), d.totalMb.toFixed(2)])
+      ? deviceRows.map((d) => [d.name, d.mac, d.ip ?? "", d.routerName, d.status, d.currentDownMib, d.currentUpMib,
+          d.rateDownMbps.toFixed(3), d.rateUpMbps.toFixed(3), d.totalDownMib, d.totalUpMib, d.totalMib, d.totalSource])
       : userRows.map((u) => [u.username, u.fullName ?? "", u.routerName, u.status, u.active ? "yes" : "no",
-          u.currentDownMb, u.currentUpMb, u.currentSec, u.totalMb.toFixed(2), u.dataLimitMb ?? ""]);
+          u.currentDownMib, u.currentUpMib, u.currentSec, u.totalDownMib, u.totalUpMib, u.totalMib,
+          u.totalUptimeSec, u.packetsIn, u.packetsOut, u.dataLimitMib ?? ""]);
     const csv = "\uFEFF" + [head, ...rows].map((r) => r.map((v) => `"${String(v).replaceAll('"', '""')}"`).join(",")).join("\r\n");
     const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
     const a = document.createElement("a");
@@ -168,17 +170,17 @@ export function ConsumptionView() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
         <Tile icon={<Radio className="w-4 h-4" />} label={ar ? "جلسات متصلة الآن" : "Active sessions now"}
           value={fmtNum(data.totals.activeSessions)} tone="emerald" />
-        <Tile icon={<Activity className="w-4 h-4" />} label={ar ? "استهلاك الجلسات الحالية" : "Current sessions usage"}
-          value={`${fmtMb(data.totals.currentDownMb)} ↓ / ${fmtMb(data.totals.currentUpMb)} ↑`} tone="sky" />
-        <Tile icon={<Database className="w-4 h-4" />} label={ar ? "إجمالي الأجهزة" : "Devices all-time"}
-          value={`${fmtMb(data.totals.totalDownMb)} ↓ / ${fmtMb(data.totals.totalUpMb)} ↑`} tone="violet" />
+        <Tile icon={<Activity className="w-4 h-4" />} label={ar ? "استهلاك الجلسات الحالية ↓ / ↑" : "Current sessions ↓ / ↑"}
+          value={`${fmtMib(data.totals.currentDownMib)} / ${fmtMib(data.totals.currentUpMib)}`} tone="sky" />
+        <Tile icon={<Database className="w-4 h-4" />} label={ar ? "إجمالي الأجهزة ↓ / ↑" : "Devices all-time ↓ / ↑"}
+          value={`${fmtMib(data.totals.totalDownMib)} / ${fmtMib(data.totals.totalUpMib)}`} tone="violet" />
         <Tile icon={<Users className="w-4 h-4" />} label={ar ? "إجمالي المستخدمين" : "Users all-time"}
-          value={fmtMb(data.totals.userTotalMb)} tone="amber" />
+          value={fmtMib(data.totals.userTotalMib)} tone="amber" />
       </div>
       <div className="text-[9.5px] text-[#64748B]" dir="auto">
         {ar
-          ? "الحالية = عدّادات الجلسة/الجهاز المفتوحة الآن على الراوتر · الآني = آخر عيّنة مزامنة · الإجمالي = تراكمي (الأجهزة من مجاميع يومية، والمستخدمون من عدّادات الراوتر)."
-          : "Current = live open session/host counters · Rate = last sync sample · Total = cumulative (devices from daily rollups, users from router counters)."}
+          ? "الحالية = عدّادات الجلسة/الجهاز المفتوحة الآن (تُصفّر عند انتهاء الجلسة) · الإجمالي = عدّادات الراوتر التراكمية للمستخدم /ip/hotspot/user/print. الوحدات MiB وGiB مثل الراوتر بالضبط."
+          : "Current = live open session/host counters (reset when the session ends) · Total = cumulative router counters from /ip/hotspot/user/print. Units are MiB/GiB, exactly as RouterOS prints them."}
       </div>
 
       <Tabs value={tab} onValueChange={(v) => setTab(v as "devices" | "users")}>
@@ -211,8 +213,11 @@ export function ConsumptionView() {
                     <Th>{ar ? "المستخدم" : "User"}</Th><Th>{ar ? "الاسم" : "Name"}</Th><Th>{ar ? "السيرفر" : "Router"}</Th>
                     <Th>{ar ? "الحالة" : "Status"}</Th>
                     <Th>{ar ? "الحالية ↓ / ↑" : "Current ↓ / ↑"}</Th>
-                    <Th>{ar ? "المدة" : "Uptime"}</Th>
-                    <Th>{ar ? "الإجمالي" : "All-time"}</Th>
+                    <Th>{ar ? "مدة الجلسة" : "Session"}</Th>
+                    <Th>{ar ? "الإجمالي ↓ / ↑" : "Total ↓ / ↑"}</Th>
+                    <Th>{ar ? "المجموع" : "All-time"}</Th>
+                    <Th>{ar ? "المدة الكلية" : "Total uptime"}</Th>
+                    <Th>{ar ? "الحزم ↓ / ↑" : "Packets ↓ / ↑"}</Th>
                     <Th>{ar ? "الحد" : "Limit"}</Th>
                   </>
                 )}
@@ -220,10 +225,10 @@ export function ConsumptionView() {
             </thead>
             <tbody className="text-[#E2E8F0]">
               {loading && (tab === "devices" ? deviceRows.length : userRows.length) === 0 && (
-                <tr><td colSpan={8} className="text-center py-10"><Loader2 className="w-5 h-5 animate-spin text-[#1685FF] mx-auto" /></td></tr>
+                <tr><td colSpan={11} className="text-center py-10"><Loader2 className="w-5 h-5 animate-spin text-[#1685FF] mx-auto" /></td></tr>
               )}
               {!loading && (tab === "devices" ? deviceRows.length : userRows.length) === 0 && (
-                <tr><td colSpan={8} className="text-center py-10 text-[#64748B] text-[11px]" dir="auto">
+                <tr><td colSpan={11} className="text-center py-10 text-[#64748B] text-[11px]" dir="auto">
                   {ar ? "لا توجد بيانات مطابقة" : "No matching data"}
                 </td></tr>
               )}
@@ -236,7 +241,7 @@ export function ConsumptionView() {
                   <Td>{d.routerName}</Td>
                   <Td><StatusBadge status={d.status} ar={ar} live={d.currentKind !== null} /></Td>
                   <Td mono>{d.currentKind
-                    ? <><span className="text-sky-300">{fmtMb(d.currentDownMb)} ↓</span> / <span className="text-violet-300">{fmtMb(d.currentUpMb)} ↑</span></>
+                    ? <><span className="text-sky-300">{fmtMib(d.currentDownMib)} ↓</span> / <span className="text-violet-300">{fmtMib(d.currentUpMib)} ↑</span></>
                     : <span className="text-[#64748B]">—</span>}</Td>
                   <Td mono title={d.rateAt && Date.now() - new Date(d.rateAt).getTime() > 300000
                     ? (ar ? "عيّنة قديمة — المزامنة لم تعمل مؤخراً" : "Stale sample — sync has not run recently")
@@ -245,8 +250,13 @@ export function ConsumptionView() {
                       ? <span className="text-[#64748B]">{d.rateDownMbps.toFixed(2)} / {d.rateUpMbps.toFixed(2)} Mbps *</span>
                       : <><span className="text-sky-300">{d.rateDownMbps.toFixed(2)}</span> / <span className="text-violet-300">{d.rateUpMbps.toFixed(2)}</span> Mbps</>}
                   </Td>
-                  <Td mono><span className="text-sky-300">{fmtMb(d.totalDownMb)} ↓</span> / <span className="text-violet-300">{fmtMb(d.totalUpMb)} ↑</span></Td>
-                  <Td mono><span className="font-bold text-emerald-300">{fmtMb(d.totalMb)}</span></Td>
+                  <Td mono title={d.totalSource === "router_user"
+                    ? (ar ? "من عدّاد المستخدم على الراوتر" : "From the router user counters")
+                    : (ar ? "من مجاميع المزامنة اليومية" : "From daily sync rollups")}>
+                    <span className="text-sky-300">{fmtMib(d.totalDownMib)} ↓</span> / <span className="text-violet-300">{fmtMib(d.totalUpMib)} ↑</span>
+                    {d.totalSource === "daily_sync" && <span className="text-[#64748B] text-[8px]"> *</span>}
+                  </Td>
+                  <Td mono><span className="font-bold text-emerald-300">{fmtMib(d.totalMib)}</span></Td>
                 </tr>
               ))}
 
@@ -258,11 +268,14 @@ export function ConsumptionView() {
                   <Td>{u.routerName}</Td>
                   <Td><StatusBadge status={u.active ? "online" : u.status} ar={ar} live={u.active} /></Td>
                   <Td mono>{u.active
-                    ? <><span className="text-sky-300">{fmtMb(u.currentDownMb)} ↓</span> / <span className="text-violet-300">{fmtMb(u.currentUpMb)} ↑</span></>
+                    ? <><span className="text-sky-300">{fmtMib(u.currentDownMib)} ↓</span> / <span className="text-violet-300">{fmtMib(u.currentUpMib)} ↑</span></>
                     : <span className="text-[#64748B]">—</span>}</Td>
                   <Td mono>{u.active ? duration(u.currentSec) : "—"}</Td>
-                  <Td mono><span className="font-bold text-emerald-300">{fmtMb(u.totalMb)}</span></Td>
-                  <Td mono>{u.dataLimitMb != null ? fmtMb(u.dataLimitMb) : "∞"}</Td>
+                  <Td mono><span className="text-sky-300">{fmtMib(u.totalDownMib)} ↓</span> / <span className="text-violet-300">{fmtMib(u.totalUpMib)} ↑</span></Td>
+                  <Td mono><span className="font-bold text-emerald-300">{fmtMib(u.totalMib)}</span></Td>
+                  <Td mono>{u.totalUptimeSec ? duration(u.totalUptimeSec) : "—"}</Td>
+                  <Td mono><span className="text-[#8CA3C3]">{fmtNum(u.packetsIn)} ↓ / {fmtNum(u.packetsOut)} ↑</span></Td>
+                  <Td mono>{u.dataLimitMib != null ? fmtMib(u.dataLimitMib) : "∞"}</Td>
                 </tr>
               ))}
             </tbody>
@@ -276,19 +289,20 @@ export function ConsumptionView() {
   );
 }
 
-function fmtMb(mb: number): string {
-  if (!Number.isFinite(mb) || mb <= 0) return "0 B";
-  if (mb >= 1048576) return `${(mb / 1048576).toFixed(2)} TB`;
-  if (mb >= 1024) return `${(mb / 1024).toFixed(2)} GB`;
-  if (mb >= 1) return `${mb.toFixed(mb >= 100 ? 0 : 1)} MB`;
-  return `${(mb * 1024).toFixed(0)} KB`;
+/** MiB-based formatting (÷1024), matching the units RouterOS prints. */
+function fmtMib(mib: number): string {
+  if (!Number.isFinite(mib) || mib <= 0) return "0";
+  if (mib >= 1048576) return `${(mib / 1048576).toFixed(2)} TiB`;
+  if (mib >= 1024) return `${(mib / 1024).toFixed(2)} GiB`;
+  if (mib >= 1) return `${mib.toFixed(mib >= 100 ? 1 : 1)} MiB`;
+  return `${(mib * 1024).toFixed(0)} KiB`;
 }
 
 function duration(sec: number): string {
   const d = Math.floor(sec / 86400);
   const h = Math.floor((sec % 86400) / 3600);
   const m = Math.floor((sec % 3600) / 60);
-  if (d) return `${d}d ${h}h`;
+  if (d) return `${d}d ${h}h ${m}m`;
   if (h) return `${h}h ${m}m`;
   return `${m}m`;
 }
@@ -322,6 +336,7 @@ function Td({ children, mono, title }: { children?: React.ReactNode; mono?: bool
 function StatusBadge({ status, ar, live }: { status: string; ar: boolean; live: boolean }) {
   const map: Record<string, [string, string]> = {
     online: ["bg-emerald-600", ar ? "متصل" : "online"],
+    active: ["bg-[#475569]", ar ? "مفعّل" : "active"],
     idle: ["bg-sky-600", ar ? "خامل" : "idle"],
     hotspot: ["bg-emerald-600", ar ? "متصل" : "online"],
     expired: ["bg-amber-600", ar ? "منتهي" : "expired"],
