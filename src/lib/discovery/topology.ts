@@ -62,8 +62,15 @@ function parseJson<T>(raw: string | null | undefined, fallback: T): T {
   try { return JSON.parse(raw) as T; } catch { return fallback; }
 }
 
+/**
+ * Only devices with a direct active-session observation (wireless / hotspot /
+ * PPP) are shown. Everything else — idle L2-only, recently_disconnected,
+ * offline, unknown, blocked — is not active and never reaches the map.
+ */
+export const ACTIVE_DEVICE_STATUSES = ["online"] as const;
+
 /** Build per-router topology (existing logic, extracted for reuse). */
-async function buildSingleRouterTopology(router: any): Promise<RouterTopology> {
+async function buildSingleRouterTopology(router: any, activeOnly = true): Promise<RouterTopology> {
   const nodes: TopoNode[] = [];
   const edges: TopoEdge[] = [];
   const unreachable = router.status !== "online";
@@ -130,7 +137,12 @@ async function buildSingleRouterTopology(router: any): Promise<RouterTopology> {
   const bridgeRows = await db.networkResource.findMany({ where: { routerId: router.id, source: "bridges" } });
   const bridgeNames = bridgeRows.map((r) => parseJson<Record<string, string>>(r.data, {}).name).filter(Boolean) as string[];
   const deviceRows = await db.networkDevice.findMany({
-    where: { routerId: router.id },
+    where: {
+      routerId: router.id,
+      // The map is a "what is on the wire right now" view: devices with no
+      // fresh presence evidence are not drawn at all.
+      ...(activeOnly ? { status: { in: [...ACTIVE_DEVICE_STATUSES] } } : {}),
+    },
     orderBy: { lastSeen: "desc" },
     take: 400,
   });
@@ -323,7 +335,7 @@ async function buildInterRouterLinks(routers: any[]): Promise<TopoEdge[]> {
 }
 
 /** Build multi-router topology with inter-router links. */
-export async function buildMultiRouterTopology(routerId?: string): Promise<MultiRouterTopology> {
+export async function buildMultiRouterTopology(routerId?: string, activeOnly = true): Promise<MultiRouterTopology> {
   const routers = await db.router.findMany({
     where: routerId ? { id: routerId } : {},
     orderBy: { createdAt: "asc" },
@@ -331,7 +343,7 @@ export async function buildMultiRouterTopology(routerId?: string): Promise<Multi
 
   const routerTopologies: RouterTopology[] = [];
   for (const router of routers) {
-    routerTopologies.push(await buildSingleRouterTopology(router));
+    routerTopologies.push(await buildSingleRouterTopology(router, activeOnly));
   }
 
   const interRouterLinks = await buildInterRouterLinks(routers);

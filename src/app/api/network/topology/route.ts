@@ -26,7 +26,10 @@ export const GET = withOrg(async (req: NextRequest) => {
 
     // Handle "all" as undefined (no filter)
     const effectiveRouterId = routerId && routerId !== "all" ? routerId : undefined;
-    const t = await buildMultiRouterTopology(effectiveRouterId);
+    // Active-only by default: the map must not show disconnected devices.
+    // `?includeInactive=1` is an explicit opt-out for diagnostics.
+    const activeOnly = req.nextUrl.searchParams.get("includeInactive") !== "1";
+    const t = await buildMultiRouterTopology(effectiveRouterId, activeOnly);
 
     // Save snapshot if requested
     if (save && effectiveRouterId) {

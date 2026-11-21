@@ -104,7 +104,7 @@ export function TopologyView() {
 
   useEffect(() => { load(); }, [load]);
   useEffect(() => {
-    const timer = setInterval(load, 45000);
+    const timer = setInterval(load, 15000);
     return () => clearInterval(timer);
   }, [load]);
 
@@ -114,16 +114,27 @@ export function TopologyView() {
     return data.routers[0] ?? null;
   }, [data, routerId]);
 
+  // Defensive client-side guard: even if an older cached payload still carries
+  // inactive devices, they are never positioned or drawn. Only devices with a
+  // direct active-session observation (status === "online") survive.
+  const visible = useMemo(() => {
+    if (!topo) return null;
+    const nodes = topo.nodes.filter((n) => n.type !== "device" || n.status === "online");
+    const ids = new Set(nodes.map((n) => n.id));
+    const edges = topo.edges.filter((e) => ids.has(e.from) && ids.has(e.to));
+    return { ...topo, nodes, edges };
+  }, [topo]);
+
   // ---------- deterministic layout ----------
   const layout = useMemo(() => {
-    if (!topo) return { nodes: [] as Positioned[], edges: [] as TopoEdge[], width: 800, height: 600, totalW: 800 };
-    const byId = new Map(topo.nodes.map((n) => [n.id, n]));
+    if (!visible) return { nodes: [] as Positioned[], edges: [] as TopoEdge[], width: 800, height: 600, totalW: 800 };
+    const byId = new Map(visible.nodes.map((n) => [n.id, n]));
     const children = new Map<string, string[]>();
-    for (const e of topo.edges) {
+    for (const e of visible.edges) {
       if (!children.has(e.from)) children.set(e.from, []);
       children.get(e.from)!.push(e.to);
     }
-    const rootIds = topo.nodes.filter((n) => n.type === "internet" || (n.type === "router" && !topo.edges.some((e) => e.to === n.id))).map((n) => n.id);
+    const rootIds = visible.nodes.filter((n) => n.type === "internet" || (n.type === "router" && !visible.edges.some((e) => e.to === n.id))).map((n) => n.id);
     const positioned: Positioned[] = [];
     const placed = new Set<string>();
     let maxW = 0;
@@ -158,7 +169,7 @@ export function TopologyView() {
     for (const root of rootIds) {
       cursor = place(root, 0, cursor) + 60;
     }
-    const orphans = topo.nodes.filter((n) => !placed.has(n.id));
+    const orphans = visible.nodes.filter((n) => !placed.has(n.id));
     let orphanX = 0;
     for (const o of orphans) {
       positioned.push({ node: o, x: orphanX, y: 30 + 5 * LEVEL_H });
@@ -166,10 +177,10 @@ export function TopologyView() {
     }
     maxW = Math.max(cursor, orphanX);
     const maxLevel = Math.max(...positioned.map((p) => p.y)) + NODE_H + 60;
-    const edgeById = new Map(topo.edges.map((e) => [e.to, e]));
+    const edgeById = new Map(visible.edges.map((e) => [e.to, e]));
     const withEdges = positioned.map((p) => ({ ...p, parentEdge: edgeById.get(p.node.id) }));
-    return { nodes: withEdges, edges: topo.edges, width: maxW, height: Math.max(maxLevel, 600), totalW: maxW };
-  }, [topo]);
+    return { nodes: withEdges, edges: visible.edges, width: maxW, height: Math.max(maxLevel, 600), totalW: maxW };
+  }, [visible]);
 
   // Center the whole map inside the visible canvas (both axes), not top-left.
   const fitView = useCallback(() => {
@@ -196,11 +207,11 @@ export function TopologyView() {
   // Auto-fit once per router/topology and whenever the canvas is resized.
   useEffect(() => { fitDoneRef.current = false; }, [routerId]);
   useEffect(() => {
-    if (!topo || topo.nodes.length === 0 || fitDoneRef.current) return;
+    if (!visible || visible.nodes.length === 0 || fitDoneRef.current) return;
     fitDoneRef.current = true;
     const id = requestAnimationFrame(() => fitView());
     return () => cancelAnimationFrame(id);
-  }, [topo, fitView]);
+  }, [visible, fitView]);
   useEffect(() => {
     const el = canvasRef.current;
     if (!el) return;
@@ -225,15 +236,18 @@ export function TopologyView() {
 
   // ---------- stats chips (CoreBit-style) ----------
   const stats = useMemo(() => {
-    const devices = topo?.nodes.filter((n) => n.type === "device") ?? [];
-    const ok = devices.filter((d) => d.status === "online").length;
-    const warn = devices.filter((d) => ["idle", "recently_disconnected", "unknown"].includes(d.status ?? "")).length;
-    const err = devices.filter((d) => ["offline", "blocked"].includes(d.status ?? "")).length;
-    return { ok, warn, err, total: devices.length };
-  }, [topo]);
+    const nodes = visible?.nodes ?? [];
+    const onlineDevices = nodes.filter((n) => n.type === "device" && n.status === "online").length;
+    return {
+      online: onlineDevices,
+      routers: nodes.filter((n) => n.type === "router").length,
+      aps: nodes.filter((n) => n.type === "ap").length,
+      total: onlineDevices,
+    };
+  }, [visible]);
 
   // ---------- search highlight + left panel ----------
-  const deviceNodes = useMemo(() => (topo?.nodes.filter((n) => n.type === "device") ?? []), [topo]);
+  const deviceNodes = useMemo(() => (visible?.nodes.filter((n) => n.type === "device") ?? []), [visible]);
   const filteredDevices = useMemo(() => {
     const s = search.toLowerCase();
     return deviceNodes.filter((d) =>
@@ -314,13 +328,13 @@ export function TopologyView() {
   };
 
   const tracePath = useCallback((deviceId: string) => {
-    if (!topo) return;
-    const targetNode = topo.nodes.find((n) => n.id === deviceId);
+    if (!visible) return;
+    const targetNode = visible.nodes.find((n) => n.id === deviceId);
     if (!targetNode) return;
 
     // Find path from device to internet
-    const byId = new Map(topo.nodes.map((n) => [n.id, n]));
-    const edgeByTo = new Map(topo.edges.map((e) => [e.to, e]));
+    const byId = new Map(visible.nodes.map((n) => [n.id, n]));
+    const edgeByTo = new Map(visible.edges.map((e) => [e.to, e]));
     const path: TopoNode[] = [];
     const pathEdges: TopoEdge[] = [];
     let current = targetNode;
@@ -338,7 +352,7 @@ export function TopologyView() {
     }
 
     setPathTrace({ from: targetNode.id, to: "internet", path, edges: pathEdges });
-  }, [topo]);
+  }, [visible]);
 
   const clearPathTrace = () => setPathTrace(null);
 
@@ -393,9 +407,9 @@ export function TopologyView() {
         </Select>
         <span className="text-[12px] font-bold text-[#22D3EE] truncate max-w-[200px]" dir="ltr">{topo?.networkName ?? ""}</span>
         {/* CoreBit-style stats chips */}
-        <Badge className="text-[10px] bg-emerald-950/60 text-emerald-300 border border-emerald-800/40" dir="ltr">{fmtNum(stats.ok)} ok</Badge>
-        <Badge className="text-[10px] bg-amber-950/60 text-amber-300 border border-amber-800/40" dir="ltr">{fmtNum(stats.warn)} warn</Badge>
-        <Badge className="text-[10px] bg-red-950/60 text-red-300 border border-red-800/40" dir="ltr">{fmtNum(stats.err)} err</Badge>
+        <Badge className="text-[10px] bg-emerald-950/60 text-emerald-300 border border-emerald-800/40" dir="ltr">{fmtNum(stats.online)} online</Badge>
+        <Badge className="text-[10px] bg-sky-950/60 text-sky-300 border border-sky-800/40" dir="ltr">{fmtNum(stats.routers)} routers</Badge>
+        <Badge className="text-[10px] bg-[#111C30]/80 text-[#8CA3C3] border border-[#1B2946]" dir="ltr">{fmtNum(stats.aps)} APs</Badge>
         <Button size="sm" className="h-8 text-[11px]" onClick={scan} disabled={syncing}>
           {syncing ? <Loader2 className="w-3.5 h-3.5 me-1 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5 me-1" />}{t("scanNetwork")}
         </Button>
@@ -608,21 +622,27 @@ export function TopologyView() {
                   </div>
                 );
               })}
-              {/* legend */}
-              <div className="absolute bottom-2 start-2 bg-[#0A1020]/85 border border-[#1B2946] rounded-lg px-2.5 py-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[8.5px] text-[#8CA3C3]" style={{ pointerEvents: "none" }}>
+            </div>
+          )}
+          {/*
+            Legend + sync stamp live on the canvas itself, OUTSIDE the panned /
+            zoomed wrapper. Dragging or zooming the tree never moves them.
+          */}
+          {topo && (
+            <>
+              <div className="absolute bottom-2 start-2 z-20 bg-[#0A1020]/85 border border-[#1B2946] rounded-lg px-2.5 py-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[8.5px] text-[#8CA3C3]" style={{ pointerEvents: "none" }}>
                 <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500" />online</span>
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-sky-400" />idle</span>
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500" />offline/blocked</span>
                 <span className="flex items-center gap-1"><svg width="18" height="6"><line x1="0" y1="3" x2="18" y2="3" stroke="#334155" strokeWidth="1.4" strokeDasharray="4 3" /></svg>{t("topologyInferred")}</span>
                 <span className="flex items-center gap-1"><svg width="18" height="6"><line x1="0" y1="3" x2="18" y2="3" stroke="#8B5CF6" strokeWidth="2" strokeDasharray="8 4" /></svg>{lang === "ar" ? "رابط بين الراوترات" : "Router Link"}</span>
                 <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500" style={{ boxShadow: "0 0 6px #10B981" }} />{lang === "ar" ? "مسار" : "Path"}</span>
+                <span className="flex items-center gap-1 text-[#4C5F80]">{lang === "ar" ? "الأجهزة غير المتصلة مخفية" : "Disconnected devices hidden"}</span>
               </div>
               {topo.lastSyncAt && (
-                <div className="absolute top-2 end-2 text-[9px] text-[#4C5F80] num" dir="ltr" style={{ pointerEvents: "none" }}>
+                <div className="absolute top-2 end-2 z-20 text-[9px] text-[#4C5F80] num" dir="ltr" style={{ pointerEvents: "none" }}>
                   sync: {new Date(topo.lastSyncAt).toLocaleString()}
                 </div>
               )}
-            </div>
+            </>
           )}
         </div>
       </div>
