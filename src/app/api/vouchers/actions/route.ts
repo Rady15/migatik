@@ -10,7 +10,7 @@ import { ensureVoucherSale } from "@/lib/voucher-sales";
  * Actions for existing cards/batches. Every router-backed action is applied on
  * the device first; only confirmed rows are then updated in the local DB.
  */
-const ACTIONS = ["mark_sold", "activate", "reactivate", "resync", "expire", "delete", "delete_batch", "sync_batch"] as const;
+const ACTIONS = ["mark_sold", "activate", "reactivate", "resync", "expire", "reset", "delete", "delete_batch", "sync_batch"] as const;
 type Action = (typeof ACTIONS)[number];
 
 const DESTRUCTIVE: Action[] = ["delete", "delete_batch"];
@@ -74,6 +74,35 @@ async function purgeHotspotUsers(vouchers: Target[]): Promise<number> {
   return (await db.hotspotUser.deleteMany({ where: { id: { in: ids } } })).count;
 }
 
+/** Remove the whole money trail of a card (invoice, payment, ledger, refunds). */
+async function purgeFinancials(vouchers: Target[]): Promise<void> {
+  const ids = [...new Set(vouchers.map((v) => v.id))];
+  const numbers = [...new Set(vouchers.map((v) => `VCH-${v.serial}`))];
+  if (!ids.length) return;
+  const invoices = await db.invoice.findMany({
+    where: { OR: [{ notes: { in: ids.map((id) => `voucher:${id}`) } }, { number: { in: numbers } }] },
+    select: { id: true },
+  });
+  const invoiceIds = invoices.map((i) => i.id);
+  const payments = await db.payment.findMany({
+    where: { OR: [{ invoiceId: { in: invoiceIds } }, { reference: { in: numbers } }] },
+    select: { id: true },
+  });
+  const paymentIds = payments.map((p) => p.id);
+  await db.customerTx.deleteMany({
+    where: {
+      OR: [
+        { refType: "voucher", refId: { in: ids } },
+        { refType: "payment", refId: { in: paymentIds } },
+      ],
+    },
+  });
+  await db.refund.deleteMany({ where: { paymentId: { in: paymentIds } } });
+  await db.employeeCommission.deleteMany({ where: { refType: "payment", refId: { in: paymentIds } } });
+  await db.payment.deleteMany({ where: { id: { in: paymentIds } } });
+  await db.invoice.deleteMany({ where: { id: { in: invoiceIds } } });
+}
+
 export const POST = withOrgStrict(async (req: NextRequest, ctx: OrgContext & { effectiveOrgId: string }) => {
   try {
     const body = await req.json().catch(() => ({})) as Record<string, unknown>;
@@ -108,7 +137,10 @@ export const POST = withOrgStrict(async (req: NextRequest, ctx: OrgContext & { e
     }
 
     const results: { id: string; ok: boolean; error?: string; detail?: string; mode?: string }[] = [];
-    const needsRouter = action !== "mark_sold";
+    // Cards that were never synced to a router can still be reset or deleted
+    // locally — otherwise local cards get stuck forever in "expired"/"sold".
+    const localOkActions: Action[] = ["mark_sold", "reset", "delete", "delete_batch"];
+    const needsRouter = !localOkActions.includes(action);
 
     for (const { router, items } of routerGroups.values()) {
       if (!needsRouter) {
@@ -128,6 +160,12 @@ export const POST = withOrgStrict(async (req: NextRequest, ctx: OrgContext & { e
             } else if (action === "delete" || action === "delete_batch") {
               const r = await removeVoucherUser(conn, v.username);
               out.push({ id: v.id, ok: r.ok, error: r.error, detail: r.missing ? "not-on-router" : "removed" });
+            } else if (action === "reset") {
+              // Drop the old router user (and its byte counters), then recreate
+              // a clean one so the card can genuinely be sold again.
+              const rm = await removeVoucherUser(conn, v.username);
+              const fresh = await upsertVoucherUser(conn, v, profileOf(v), false, limitsOf(v));
+              out.push({ id: v.id, ok: Boolean(fresh.ok && (rm.ok || rm.missing)), error: fresh.error ?? rm.error, detail: "counters reset" });
             }
           } catch (e) {
             out.push({ id: v.id, ok: false, error: (e as Error).message });
@@ -159,9 +197,16 @@ export const POST = withOrgStrict(async (req: NextRequest, ctx: OrgContext & { e
 
     if (okIds.length) {
       if (action === "delete" || action === "delete_batch") {
+        const done = targets.filter((v) => okIds.includes(v.id));
+        await purgeFinancials(done);
         changed = (await db.voucher.deleteMany({ where: { id: { in: okIds } } })).count;
         // Keep the Users page truthful: the card's hotspot user is gone.
-        purgedUsers = await purgeHotspotUsers(targets.filter((v) => okIds.includes(v.id)));
+        purgedUsers = await purgeHotspotUsers(done);
+        for (const v of done) {
+          await db.activityLog.create({
+            data: { actor: ctx.username, action: "voucher_sale_deleted", target: v.id, details: "حذف نهائي للكرت" },
+          }).catch(() => {});
+        }
         if (action === "delete_batch" && body.batchId) {
           await db.voucherBatch.deleteMany({ where: { id: String(body.batchId) } }).catch(() => {});
         }
@@ -186,6 +231,14 @@ export const POST = withOrgStrict(async (req: NextRequest, ctx: OrgContext & { e
             if (v.status === "pending_sync" || v.status === "failed") data.status = "unused";
           } else if (action === "expire") {
             data.status = "expired";
+          } else if (action === "reset") {
+            // Return the card to sellable stock with a clean consumption trail.
+            data.status = "unused";
+            data.soldAt = null;
+            data.activatedAt = null;
+            data.expiresAt = null;
+            data.routerSynced = Boolean(v.routerId);
+            data.syncError = null;
           }
           if (Object.keys(data).length) {
             await db.voucher.update({ where: { id }, data });
@@ -194,6 +247,14 @@ export const POST = withOrgStrict(async (req: NextRequest, ctx: OrgContext & { e
           // A sold/activated card is money in: invoice + payment + ledger (idempotent).
           if (action === "mark_sold" || action === "activate" || action === "reactivate") {
             await ensureVoucherSale(id).catch(() => {});
+          }
+          if (action === "reset") {
+            await purgeFinancials([v]);
+            // Remove the tombstone so the card can be sold and billed again.
+            await db.activityLog.deleteMany({
+              where: { action: "voucher_sale_deleted", target: id },
+            }).catch(() => {});
+            purgedUsers += await purgeHotspotUsers([v]);
           }
         }
 

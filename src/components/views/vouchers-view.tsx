@@ -12,7 +12,7 @@ import { StatusPill } from "./hotspot-users-view";
 import { DlgField } from "./packages-view";
 import {
   Plus, Printer, Loader2, Layers, QrCode, X, EyeOff,
-  RefreshCw, Play, ShoppingCart, Ban, Trash2, Wifi,
+  RefreshCw, Play, ShoppingCart, Ban, Trash2, Wifi, RotateCcw,
 } from "lucide-react";
 
 interface Voucher {
@@ -277,11 +277,12 @@ export function VouchersView() {
                 <th>{lang === "ar" ? "التحميل" : "Download"}</th>
                 <th>{lang === "ar" ? "الرفع" : "Upload"}</th>
                 <th>{lang === "ar" ? "الحالة الآن" : "Live state"}</th>
+                <th>{lang === "ar" ? "إجراءات" : "Actions"}</th>
               </tr>
             </thead>
             <tbody>
               {!consumption || consumption.items.length === 0 ? (
-                <tr><td colSpan={9} className="text-center text-[#64748B] py-6">{t("noData")}</td></tr>
+                <tr><td colSpan={10} className="text-center text-[#64748B] py-6">{t("noData")}</td></tr>
               ) : consumption.items.map((c) => (
                 <tr key={c.id} className="hover:bg-[#121E38]/70 transition-colors">
                   <td className="font-bold text-[#E2E8F0] num" dir="ltr">{c.username}</td>
@@ -300,6 +301,26 @@ export function VouchersView() {
                     ) : (
                       <span className="text-[10px] text-[#64748B]">{c.usage ? (lang === "ar" ? "انتهت الجلسة" : "Idle") : "—"}</span>
                     )}
+                  </td>
+                  <td>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        disabled={!!actionBusy}
+                        title={lang === "ar" ? "إرجاع الكرت: حالة غير مستخدم + تصفية الاستهلاك" : "Reset card: unused + clear consumption"}
+                        onClick={() => runAction("reset", [c.id])}
+                        className="text-emerald-300/90 hover:text-emerald-200 disabled:opacity-40"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        disabled={!!actionBusy}
+                        title={lang === "ar" ? "حذف نهائي للكرت وكل أثره المالي" : "Permanently delete card and its financial trail"}
+                        onClick={() => setDeleteTarget({ ids: [c.id], label: c.username })}
+                        className="text-red-300/90 hover:text-red-200 disabled:opacity-40"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -336,6 +357,14 @@ export function VouchersView() {
                   title={lang === "ar" ? "إعادة مزامنة كل كروت الدفعة على الراوتر" : "Re-sync every card in this batch on the router"}
                 >
                   <RefreshCw className="w-3 h-3" /> {lang === "ar" ? "مزامنة" : "Sync"}
+                </button>
+                <button
+                  disabled={!!actionBusy}
+                  onClick={() => runAction("reset", [], { batchId: b.id })}
+                  className="flex items-center gap-1 text-[10px] font-bold text-emerald-300/90 hover:text-emerald-200 disabled:opacity-40"
+                  title={lang === "ar" ? "إرجاع كل كروت الدفعة لحالة غير مستخدم وتصفية استهلاكها" : "Reset every card in this batch to unused"}
+                >
+                  <RotateCcw className="w-3 h-3" /> {lang === "ar" ? "إرجاع" : "Reset"}
                 </button>
                 <button
                   disabled={!!actionBusy}
@@ -421,6 +450,11 @@ export function VouchersView() {
                         {v.status === "activated" && (
                           <button disabled={!!actionBusy} title={lang === "ar" ? "إنهاء صلاحية الكرت" : "Expire card"} onClick={() => runAction("expire", [v.id])} className="text-amber-300/90 hover:text-amber-200 disabled:opacity-40">
                             <Ban className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                        {v.status !== "unused" && (
+                          <button disabled={!!actionBusy} title={lang === "ar" ? "إرجاع الكرت: غير مستخدم + تصفية الاستهلاك" : "Reset card: unused + clear consumption"} onClick={() => runAction("reset", [v.id])} className="text-emerald-300/90 hover:text-emerald-200 disabled:opacity-40">
+                            <RotateCcw className="w-3.5 h-3.5" />
                           </button>
                         )}
                         <button disabled={!!actionBusy} title={lang === "ar" ? "إعادة المزامنة مع الراوتر" : "Re-sync with router"} onClick={() => runAction("resync", [v.id])} className="text-[#1685FF] hover:text-[#5CA9FF] disabled:opacity-40">
@@ -559,7 +593,7 @@ export function VouchersView() {
           <DialogHeader><DialogTitle className="text-white">{lang === "ar" ? "تأكيد الحذف" : "Confirm deletion"}</DialogTitle></DialogHeader>
           <p className="text-xs text-[#8CA3C3] leading-relaxed">
             {lang === "ar"
-              ? `سيتم حذف «${deleteTarget?.label}» من قاعدة البيانات ومن مستخدمي Hotspot على الراوتر. لا يمكن التراجع.`
+              ? `سيتم حذف «${deleteTarget?.label}» نهائياً من قاعدة البيانات ومن مستخدمي Hotspot على الراوتر، مع كل فواتيره ودفعاته وحركات استهلاكه. لا يمكن التراجع.`
               : `This will delete "${deleteTarget?.label}" from the database and from Hotspot users on the router. This cannot be undone.`}
           </p>
           <div className="flex gap-2 justify-end">
