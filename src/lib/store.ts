@@ -6,7 +6,7 @@ import type { Lang } from "@/lib/i18n";
 export type ViewKey =
   | "dashboard" | "servers" | "users" | "packages" | "monitoring" | "reports"
   | "payments" | "cards" | "settings" | "tools" | "support"
-  | "devices" | "topology"
+  | "devices" | "topology" | "consumption"
   | "subscribers" | "finance" | "branches" | "ros" | "agents";
 
 interface AppState {

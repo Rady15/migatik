@@ -19,6 +19,7 @@ import { SupportView } from "@/components/views/support-view";
 import { SettingsView } from "@/components/views/settings-view";
 import { DevicesView } from "@/components/views/devices-view";
 import { TopologyView } from "@/components/views/topology-view";
+import { ConsumptionView } from "@/components/views/consumption-view";
 import { SubscribersView } from "@/components/views/subscribers-view";
 import { FinanceView } from "@/components/views/finance-view";
 import { BranchesView } from "@/components/views/branches-view";
@@ -44,6 +45,7 @@ export function AppShell({ user, onLogout }: { user: AppUser; onLogout: () => vo
       case "dashboard": return <DashboardView />;
       case "devices": return <DevicesView />;
       case "topology": return <TopologyView />;
+      case "consumption": return <ConsumptionView />;
       case "servers": return <RoutersView />;
       case "agents": return <AgentsView />;
       case "users": return <HotspotUsersView />;

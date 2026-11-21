@@ -40,6 +40,7 @@ export function Sidebar({ activeView, onNavigate }: { activeView: ViewKey; onNav
     { key: "dashboard", label: t("home"), icon: <Home className="w-4 h-4" /> },
     { key: "devices", label: t("devices"), icon: <Boxes className="w-4 h-4" /> },
     { key: "topology", label: t("networkMap"), icon: <Network className="w-4 h-4" /> },
+    { key: "consumption", label: lang === "ar" ? "الاستهلاك" : "Consumption", icon: <Activity className="w-4 h-4" /> },
     { key: "servers", label: t("servers"), icon: <Server className="w-4 h-4" /> },
     { key: "agents", label: lang === "ar" ? "وكلاء الشبكة" : "Network Agents", icon: <RadioTower className="w-4 h-4" /> },
     { key: "users", label: t("users"), icon: <Users className="w-4 h-4" /> },
