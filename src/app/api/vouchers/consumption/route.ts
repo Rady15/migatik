@@ -40,9 +40,7 @@ export const GET = withOrg(async (req: NextRequest) => {
     await syncVoucherUsage().catch(() => {});
 
     const requested = req.nextUrl.searchParams.get("routerId");
-    const where: Record<string, unknown> = {
-      status: { in: ["sold", "activated", "expired"] },
-    };
+    const where: Record<string, unknown> = {};
     if (requested && requested !== "all") where.routerId = requested;
 
     const cards = await db.voucher.findMany({
@@ -50,10 +48,13 @@ export const GET = withOrg(async (req: NextRequest) => {
       orderBy: [{ activatedAt: "desc" }, { soldAt: "desc" }, { createdAt: "desc" }],
       take: 500,
       select: {
-        id: true, username: true, serial: true, status: true, price: true, currency: true,
+        id: true, username: true, serial: true, password: true, authMode: true,
+        status: true, price: true, currency: true, createdAt: true,
         soldAt: true, activatedAt: true, expiresAt: true, routerId: true,
+        routerSynced: true, syncError: true,
         router: { select: { name: true } },
-        package: { select: { name: true } },
+        package: { select: { name: true, dataLimitMb: true, durationHours: true, downloadMbps: true, uploadMbps: true, profile: true } },
+        batch: { select: { name: true, validityHours: true } },
       },
     });
 
@@ -122,20 +123,51 @@ export const GET = withOrg(async (req: NextRequest) => {
       if (!res.value.usersOk) errors.push(`${router.name}: ${res.value.usersErr ?? "user print failed"}`);
     }
 
+    const now = Date.now();
+    const MIB = 1048576;
     const items = cards.map((v) => {
-      const usage = (v.routerId ? usageByRouter.get(v.routerId)?.get(v.username.toLowerCase()) : undefined) ?? null;
+      // Cards can exist without routerId while their hotspot user still lives
+      // on a router (legacy imports), so fall back to a username lookup across
+      // every router instead of showing "—" for a card that has real usage.
+      let usage = v.routerId ? usageByRouter.get(v.routerId)?.get(v.username.toLowerCase()) : undefined;
+      if (!usage) {
+        for (const map of usageByRouter.values()) {
+          const found = map.get(v.username.toLowerCase());
+          if (found) { usage = found; break; }
+        }
+      }
+      const usedMib = usage ? (Number(usage.bytesIn) + Number(usage.bytesOut)) / MIB : 0;
+      const limitMib = v.package?.dataLimitMb ? Number(v.package.dataLimitMb) : null;
+      const downMib = usage ? Number(usage.bytesIn) / MIB : 0;
+      const upMib = usage ? Number(usage.bytesOut) / MIB : 0;
+      const remainingSec = v.expiresAt ? Math.floor((new Date(v.expiresAt).getTime() - now) / 1000) : null;
+      const validityHours = v.batch?.validityHours || v.package?.durationHours || null;
       return {
         ...v,
-        usage,
+        usage: usage ?? null,
+        detail: {
+          downMib: Math.round(downMib * 100) / 100,
+          upMib: Math.round(upMib * 100) / 100,
+          usedMib: Math.round(usedMib * 100) / 100,
+          limitMib,
+          remainingMib: limitMib != null ? Math.round(Math.max(0, limitMib - usedMib) * 100) / 100 : null,
+          usedPct: limitMib && limitMib > 0 ? Math.round((usedMib / limitMib) * 1000) / 10 : null,
+          validityHours,
+          remainingSec,
+          expired: remainingSec != null && remainingSec <= 0,
+          speed: v.package?.downloadMbps || v.package?.uploadMbps
+            ? `${v.package.downloadMbps ?? 0}/${v.package.uploadMbps ?? 0} Mbps` : null,
+        },
       };
     });
 
+    const usedItems = items.filter((i) => ["sold", "activated", "expired"].includes(i.status) || i.usage);
     return NextResponse.json({
       items,
       totals: {
-        used: cards.length,
-        revenue: cards.reduce((sum, v) => sum + (Number(v.price) || 0), 0),
-        connected: items.filter((v) => v.usage?.active).length,
+        used: usedItems.length,
+        revenue: usedItems.reduce((sum, i) => sum + (Number(i.price) || 0), 0),
+        connected: items.filter((i) => i.usage?.active).length,
       },
       errors,
       fetchedAt: new Date().toISOString(),

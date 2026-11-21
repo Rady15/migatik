@@ -12,7 +12,7 @@ import { StatusPill } from "./hotspot-users-view";
 import { DlgField } from "./packages-view";
 import {
   Plus, Printer, Loader2, Layers, QrCode, X, EyeOff,
-  RefreshCw, Play, ShoppingCart, Ban, Trash2, Wifi, RotateCcw,
+  RefreshCw, Play, ShoppingCart, Ban, Trash2, Wifi, RotateCcw, Info,
 } from "lucide-react";
 
 interface Voucher {
@@ -34,9 +34,19 @@ interface Usage {
   active: boolean; disabled: boolean; profile?: string;
 }
 interface ConsumptionItem {
-  id: string; username: string; serial: string; status: string;
-  price: number; currency: string; soldAt: string | null; activatedAt: string | null; expiresAt: string | null;
-  router?: { name: string } | null; package?: { name: string } | null; usage: Usage | null;
+  id: string; username: string; serial: string; password: string; authMode: string;
+  status: string; price: number; currency: string;
+  soldAt: string | null; activatedAt: string | null; expiresAt: string | null; createdAt: string;
+  routerSynced: boolean; syncError: string | null;
+  router?: { name: string } | null;
+  package?: { name: string; dataLimitMb?: number | null; durationHours?: number | null; downloadMbps?: number | null; uploadMbps?: number | null; profile?: string | null } | null;
+  batch?: { name: string; validityHours: number | null } | null;
+  usage: Usage | null;
+  detail: {
+    downMib: number; upMib: number; usedMib: number;
+    limitMib: number | null; remainingMib: number | null; usedPct: number | null;
+    validityHours: number | null; remainingSec: number | null; expired: boolean; speed: string | null;
+  };
 }
 interface Consumption {
   items: ConsumptionItem[];
@@ -51,6 +61,14 @@ function fmtBytes(bytes?: number): string {
   if (n >= 1024 ** 2) return `${(n / 1024 ** 2).toFixed(1)} MB`;
   if (n >= 1024) return `${(n / 1024).toFixed(0)} KB`;
   return `${n} B`;
+}
+
+function fmtMib(mib?: number | null): string {
+  const n = Number(mib ?? 0);
+  if (n <= 0) return "0";
+  if (n >= 1048576) return `${(n / 1048576).toFixed(2)} TiB`;
+  if (n >= 1024) return `${(n / 1024).toFixed(2)} GiB`;
+  return `${n.toFixed(n >= 100 ? 1 : 2)} MiB`;
 }
 
 function fmtDuration(sec?: number): string {
@@ -91,6 +109,8 @@ export function VouchersView() {
   const [printBatch, setPrintBatch] = useState<{ batchId: string; name: string; authMode?: string } | null>(null);
   const [actionBusy, setActionBusy] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<{ ids: string[]; label: string; batchId?: string } | null>(null);
+  const [detailCard, setDetailCard] = useState<ConsumptionItem | null>(null);
+  const [usedOnly, setUsedOnly] = useState(false);
 
   const pageSize = 15;
 
@@ -189,6 +209,8 @@ export function VouchersView() {
   }
 
   const totalPages = data ? Math.max(1, Math.ceil(data.total / pageSize)) : 1;
+  const consumptionRows = (consumption?.items ?? []).filter((i) =>
+    !usedOnly || ["sold", "activated", "expired"].includes(i.status) || Boolean(i.usage));
 
   return (
     <div className="space-y-4">
@@ -257,22 +279,29 @@ export function VouchersView() {
             <Wifi className="w-4 h-4 text-emerald-300" />
             {lang === "ar" ? "استهلاك الكروت بالكامل" : "Full card consumption"}
           </h2>
-          <span className="text-[10px] text-[#64748B]">
-            {consumption ? `${fmtNum(consumption.totals.used)} ${lang === "ar" ? "كرت مستخدم" : "used cards"} · ${lang === "ar" ? "آخر تحديث" : "updated"} ${new Date(consumption.fetchedAt).toLocaleTimeString(lang === "ar" ? "ar-EG" : "en-GB")}` : "…"}
-          </span>
+          <div className="flex items-center gap-3 flex-wrap">
+            <label className="flex items-center gap-1.5 cursor-pointer text-[10px] text-[#8CA3C3]">
+              <input type="checkbox" checked={usedOnly} onChange={(e) => setUsedOnly(e.target.checked)} className="accent-[#1685FF]" />
+              {lang === "ar" ? "المستخدمة فقط" : "Used only"}
+            </label>
+            <span className="text-[10px] text-[#64748B]">
+              {consumption ? `${fmtNum(consumption.totals.used)} ${lang === "ar" ? "كرت مستخدم" : "used cards"} · ${lang === "ar" ? "آخر تحديث" : "updated"} ${new Date(consumption.fetchedAt).toLocaleTimeString(lang === "ar" ? "ar-EG" : "en-GB")}` : "…"}
+            </span>
+          </div>
         </div>
         {consumption?.errors?.length ? (
           <div className="px-4 py-2 text-[10px] text-amber-300/90">{consumption.errors.slice(0, 2).join(" | ")}</div>
         ) : null}
         <div className="overflow-x-auto">
-          <table className="mt-table w-full min-w-[820px]">
+          <table className="mt-table w-full min-w-[1080px]">
             <thead>
               <tr>
                 <th>{lang === "ar" ? "الكرت" : "Card"}</th>
-                <th>{lang === "ar" ? "الباقة" : "Package"}</th>
-                <th>{t("status")}</th>
-                <th>{lang === "ar" ? "تاريخ البيع" : "Sold at"}</th>
-                <th>{lang === "ar" ? "الصلاحية تنتهي" : "Expires"}</th>
+                <th>{lang === "ar" ? "الباقة / السرعة" : "Package / speed"}</th>
+                <th>{lang === "ar" ? "الحد" : "Limit"}</th>
+                <th>{lang === "ar" ? "المستهلك" : "Used"}</th>
+                <th>{lang === "ar" ? "المتبقي" : "Remaining"}</th>
+                <th>{lang === "ar" ? "الصلاحية" : "Validity"}</th>
                 <th>{lang === "ar" ? "مدة الاستخدام" : "Used time"}</th>
                 <th>{lang === "ar" ? "التحميل" : "Download"}</th>
                 <th>{lang === "ar" ? "الرفع" : "Upload"}</th>
@@ -281,18 +310,57 @@ export function VouchersView() {
               </tr>
             </thead>
             <tbody>
-              {!consumption || consumption.items.length === 0 ? (
-                <tr><td colSpan={10} className="text-center text-[#64748B] py-6">{t("noData")}</td></tr>
-              ) : consumption.items.map((c) => (
+              {!consumption || consumptionRows.length === 0 ? (
+                <tr><td colSpan={11} className="text-center text-[#64748B] py-6">{t("noData")}</td></tr>
+              ) : consumptionRows.map((c) => (
                 <tr key={c.id} className="hover:bg-[#121E38]/70 transition-colors">
-                  <td className="font-bold text-[#E2E8F0] num" dir="ltr">{c.username}</td>
-                  <td className="text-[#CBD5E1]">{c.package?.name ?? "—"}</td>
-                  <td><StatusPill status={c.status} lang={lang} /></td>
-                  <td className="num text-[#8CA3C3]" dir="ltr">{c.soldAt ? fmtDate(c.soldAt) : "—"}</td>
-                  <td className="num text-[#8CA3C3]" dir="ltr">{c.expiresAt ? fmtDate(c.expiresAt) : "—"}</td>
+                  <td>
+                    <button onClick={() => setDetailCard(c)} className="font-bold text-[#E2E8F0] num hover:text-[#5CA9FF]" dir="ltr">{c.username}</button>
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <span className="num text-[9px] text-[#64748B]" dir="ltr">{c.serial}</span>
+                      <StatusPill status={c.status} lang={lang} />
+                    </div>
+                  </td>
+                  <td>
+                    <div className="text-[#CBD5E1]">{c.package?.name ?? "—"}</div>
+                    <div className="text-[9px] text-[#64748B] num" dir="ltr">{c.detail.speed ?? ""}</div>
+                  </td>
+                  <td className="num text-[#8CA3C3]" dir="ltr">{c.detail.limitMib != null ? fmtMib(c.detail.limitMib) : "∞"}</td>
+                  <td className="num text-[#E2E8F0]" dir="ltr">
+                    {fmtMib(c.detail.usedMib)}
+                    {c.detail.usedPct != null && <div className="text-[9px] text-[#8CA3C3]">{c.detail.usedPct}%</div>}
+                  </td>
+                  <td>
+                    {c.detail.limitMib == null ? (
+                      <span className="text-[#64748B] text-[11px]">{lang === "ar" ? "بدون حد" : "Unlimited"}</span>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <div className="h-1.5 w-14 rounded-full bg-[#1B2946] overflow-hidden shrink-0">
+                          <div className="h-full rounded-full" style={{
+                            width: `${Math.min(100, c.detail.usedPct ?? 0)}%`,
+                            background: (c.detail.usedPct ?? 0) > 80 ? "#EF4444" : (c.detail.usedPct ?? 0) > 50 ? "#F59E0B" : "#22D3EE",
+                          }} />
+                        </div>
+                        <span className="num text-[#CBD5E1]" dir="ltr">{fmtMib(c.detail.remainingMib)}</span>
+                      </div>
+                    )}
+                  </td>
+                  <td className="num text-[#8CA3C3]" dir="ltr">
+                    {c.expiresAt ? (
+                      <>
+                        <div>{fmtDate(c.expiresAt)}</div>
+                        <div className={`text-[9px] ${c.detail.expired ? "text-red-400" : "text-emerald-400"}`}>
+                          {c.detail.expired
+                            ? (lang === "ar" ? "منتهي" : "Expired")
+                            : c.detail.remainingSec != null
+                              ? `${lang === "ar" ? "باقي" : "left"} ${fmtDuration(c.detail.remainingSec)}` : ""}
+                        </div>
+                      </>
+                    ) : "—"}
+                  </td>
                   <td className="num text-[#E2E8F0]" dir="ltr">{c.usage ? fmtDuration(c.usage.uptimeSec) : "—"}</td>
-                  <td className="num text-[#22D3EE]" dir="ltr">{c.usage ? fmtBytes(c.usage.bytesIn) : "—"}</td>
-                  <td className="num text-[#22D3EE]" dir="ltr">{c.usage ? fmtBytes(c.usage.bytesOut) : "—"}</td>
+                  <td className="num text-[#22D3EE]" dir="ltr">{fmtMib(c.detail.downMib)}</td>
+                  <td className="num text-[#22D3EE]" dir="ltr">{fmtMib(c.detail.upMib)}</td>
                   <td>
                     {c.usage?.active ? (
                       <span className="text-[10px] font-bold text-emerald-300">{lang === "ar" ? "متصل الآن" : "Online"}</span>
@@ -304,6 +372,9 @@ export function VouchersView() {
                   </td>
                   <td>
                     <div className="flex items-center gap-1.5">
+                      <button disabled={!!actionBusy} title={lang === "ar" ? "كل تفاصيل الكرت" : "Full card details"} onClick={() => setDetailCard(c)} className="text-[#22D3EE] hover:text-white disabled:opacity-40">
+                        <Info className="w-3.5 h-3.5" />
+                      </button>
                       <button
                         disabled={!!actionBusy}
                         title={lang === "ar" ? "إرجاع الكرت: حالة غير مستخدم + تصفية الاستهلاك" : "Reset card: unused + clear consumption"}
@@ -587,6 +658,81 @@ export function VouchersView() {
         </DialogContent>
       </Dialog>
 
+      {/* full card details */}
+      <Dialog open={!!detailCard} onOpenChange={(v) => !v && setDetailCard(null)}>
+        <DialogContent className="bg-[#0E1A31] border-[#24344F] text-[#F1F5F9] max-w-lg max-h-[88vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-white flex items-center gap-2">
+              <Info className="w-4 h-4 text-[#22D3EE]" />
+              {lang === "ar" ? "تفاصيل الكارت بالكامل" : "Full card details"}
+              <span className="text-[11px] text-[#8CA3C3] num" dir="ltr">{detailCard?.username}</span>
+            </DialogTitle>
+          </DialogHeader>
+          {detailCard && (
+            <div className="space-y-3 text-[12px]">
+              <div className="flex items-center justify-between gap-2 rounded-lg bg-[#0B1428] border border-[#24344F] px-3 py-2">
+                <span className="text-[#8CA3C3]">{lang === "ar" ? "الحالة" : "Status"}</span>
+                <StatusPill status={detailCard.status} lang={lang} />
+              </div>
+
+              <Section title={lang === "ar" ? "البيانات الأساسية" : "Identity"}>
+                <Detail label={lang === "ar" ? "الرقم التسلسلي" : "Serial"} value={detailCard.serial} mono />
+                <Detail label={t("username")} value={detailCard.username} mono />
+                <Detail label={t("password")} value={detailCard.authMode === "pin" ? detailCard.username : detailCard.password} mono />
+                <Detail label={lang === "ar" ? "الوضع" : "Auth mode"} value={(AUTH_MODE_OPTIONS.find((m) => m.value === detailCard.authMode) ?? { ar: detailCard.authMode, en: detailCard.authMode })[lang === "ar" ? "ar" : "en"]} />
+                <Detail label={t("router")} value={detailCard.router?.name ?? "—"} />
+                <Detail label={lang === "ar" ? "الدفعة" : "Batch"} value={detailCard.batch?.name ?? "—"} />
+                <Detail label={t("price")} value={fmtMoney(detailCard.price, detailCard.currency)} mono />
+              </Section>
+
+              <Section title={lang === "ar" ? "الباقة والصلاحية" : "Package & validity"}>
+                <Detail label={t("package")} value={detailCard.package?.name ?? "—"} />
+                <Detail label={lang === "ar" ? "البروفايل" : "Profile"} value={detailCard.package?.profile ?? detailCard.usage?.profile ?? "—"} mono />
+                <Detail label={lang === "ar" ? "السرعة" : "Speed"} value={detailCard.detail.speed ?? "—"} mono />
+                <Detail label={lang === "ar" ? "صلاحية الكرت" : "Validity"} value={detailCard.detail.validityHours != null ? `${detailCard.detail.validityHours}h` : "—"} mono />
+                <Detail label={lang === "ar" ? "تاريخ الإنشاء" : "Created"} value={fmtDate(detailCard.createdAt)} mono />
+                <Detail label={lang === "ar" ? "تاريخ البيع" : "Sold at"} value={detailCard.soldAt ? fmtDate(detailCard.soldAt) : "—"} mono />
+                <Detail label={lang === "ar" ? "التفعيل" : "Activated"} value={detailCard.activatedAt ? fmtDate(detailCard.activatedAt) : "—"} mono />
+                <Detail label={lang === "ar" ? "تنتهي في" : "Expires"} value={detailCard.expiresAt ? fmtDate(detailCard.expiresAt) : "—"} mono />
+                <Detail label={lang === "ar" ? "المتبقي من الصلاحية" : "Time left"} value={detailCard.detail.expired ? (lang === "ar" ? "منتهي" : "Expired") : detailCard.detail.remainingSec != null ? fmtDuration(detailCard.detail.remainingSec) : "—"} mono />
+              </Section>
+
+              <Section title={lang === "ar" ? "الاستهلاك" : "Consumption"}>
+                <Detail label={lang === "ar" ? "التحميل" : "Download"} value={fmtMib(detailCard.detail.downMib)} mono />
+                <Detail label={lang === "ar" ? "الرفع" : "Upload"} value={fmtMib(detailCard.detail.upMib)} mono />
+                <Detail label={lang === "ar" ? "إجمالي المستهلك" : "Total used"} value={fmtMib(detailCard.detail.usedMib)} mono />
+                <Detail label={lang === "ar" ? "الحد" : "Limit"} value={detailCard.detail.limitMib != null ? fmtMib(detailCard.detail.limitMib) : (lang === "ar" ? "غير محدود" : "Unlimited")} mono />
+                <Detail label={lang === "ar" ? "المتبقي" : "Remaining"} value={detailCard.detail.remainingMib != null ? `${fmtMib(detailCard.detail.remainingMib)} (${detailCard.detail.usedPct ?? 0}%)` : "—"} mono />
+                <Detail label={lang === "ar" ? "مدة الاستخدام" : "Used time"} value={detailCard.usage ? fmtDuration(detailCard.usage.uptimeSec) : "—"} mono />
+                <Detail label={lang === "ar" ? "الحالة الآن" : "Live state"} value={detailCard.usage?.active ? (lang === "ar" ? "متصل الآن" : "Online") : detailCard.usage?.disabled ? (lang === "ar" ? "معطّل" : "Disabled") : detailCard.usage ? (lang === "ar" ? "انتهت الجلسة" : "Idle") : "—"} />
+              </Section>
+
+              {detailCard.detail.limitMib != null && (
+                <div>
+                  <div className="flex items-center justify-between text-[10px] text-[#8CA3C3] mb-1">
+                    <span>{lang === "ar" ? "نسبة الاستهلاك" : "Usage"}</span>
+                    <span className="num" dir="ltr">{detailCard.detail.usedPct ?? 0}%</span>
+                  </div>
+                  <div className="h-2 rounded-full bg-[#1B2946] overflow-hidden">
+                    <div className="h-full rounded-full" style={{
+                      width: `${Math.min(100, detailCard.detail.usedPct ?? 0)}%`,
+                      background: (detailCard.detail.usedPct ?? 0) > 80 ? "#EF4444" : (detailCard.detail.usedPct ?? 0) > 50 ? "#F59E0B" : "#22D3EE",
+                    }} />
+                  </div>
+                </div>
+              )}
+              {detailCard.syncError && <div className="text-[11px] text-red-400" dir="auto">{detailCard.syncError}</div>}
+              <div className="flex justify-end gap-2 pt-1">
+                <Button onClick={() => { runAction("reset", [detailCard.id]); setDetailCard(null); }} disabled={!!actionBusy} className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs gap-1.5">
+                  <RotateCcw className="w-3.5 h-3.5" />{lang === "ar" ? "إرجاع الكرت" : "Reset card"}
+                </Button>
+                <Button variant="ghost" onClick={() => setDetailCard(null)} className="text-[#CBD5E1]">{lang === "ar" ? "إغلاق" : "Close"}</Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
       {/* delete confirmation */}
       <Dialog open={!!deleteTarget} onOpenChange={(v) => !v && setDeleteTarget(null)}>
         <DialogContent className="bg-[#0E1A31] border-[#24344F] text-[#F1F5F9] max-w-sm">
@@ -615,6 +761,24 @@ export function VouchersView() {
 
       {/* print dialog */}
       {printBatch && <PrintDialog batchId={printBatch.batchId} name={printBatch.name} batchAuthMode={printBatch.authMode} onClose={() => setPrintBatch(null)} />}
+    </div>
+  );
+}
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-lg border border-[#24344F] bg-[#0B1428]/60 p-3">
+      <div className="text-[11px] font-extrabold text-[#22D3EE] mb-2" dir="auto">{title}</div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5">{children}</div>
+    </div>
+  );
+}
+
+function Detail({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+  return (
+    <div className="flex items-center justify-between gap-2 min-w-0">
+      <span className="text-[11px] text-[#8CA3C3] shrink-0" dir="auto">{label}</span>
+      <span className={`text-[11.5px] text-[#E2E8F0] text-end truncate ${mono ? "num" : ""}`} dir={mono ? "ltr" : "auto"}>{value}</span>
     </div>
   );
 }
