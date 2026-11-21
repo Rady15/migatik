@@ -37,10 +37,23 @@ export const PATCH = withOrgStrict(async (req: NextRequest) => {
   }
 });
 
-export const DELETE = withOrgStrict(async (req: NextRequest) => {
+export const DELETE = withOrgStrict(async (req: NextRequest, ctx) => {
   try {
     const id = await routeId(req);
+    const invoice = await db.invoice.findUnique({ where: { id }, select: { number: true, customerName: true, total: true } });
+    if (!invoice) return NextResponse.json({ error: "الفاتورة غير موجودة" }, { status: 404 });
+    // Keep the money: a paid invoice's payment stays in the ledger as revenue,
+    // it just loses the link to the deleted document.
+    await db.payment.updateMany({ where: { invoiceId: id }, data: { invoiceId: null } });
     await db.invoice.delete({ where: { id } });
+    await db.activityLog.create({
+      data: {
+        actor: ctx.username,
+        action: "حذف فاتورة",
+        target: invoice.number,
+        details: `${invoice.customerName} — ${invoice.total}`,
+      },
+    });
     return NextResponse.json({ ok: true });
   } catch (e) {
     return serverError(e);

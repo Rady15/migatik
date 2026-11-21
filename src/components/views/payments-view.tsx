@@ -10,7 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { RouterSelect } from "@/components/ui/router-select";
 import { StatusPill } from "./hotspot-users-view";
 import { DlgField } from "./packages-view";
-import { Plus, Loader2, Receipt, Banknote, FileText, Printer } from "lucide-react";
+import { Plus, Loader2, Receipt, Banknote, FileText, Printer, Trash2 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface Invoice {
@@ -31,6 +31,8 @@ export function PaymentsView() {
   const [invOpen, setInvOpen] = useState(false);
   const [payOpen, setPayOpen] = useState(false);
   const [printInv, setPrintInv] = useState<Invoice | null>(null);
+  const [deleteInv, setDeleteInv] = useState<Invoice | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const [saving, setSaving] = useState(false);
   const [routerId, setRouterId] = useState("all");
   const [invForm, setInvForm] = useState({ customerName: "", customerPhone: "", description: "", amount: "", discount: "0", taxRate: "14", dueDate: "" });
@@ -68,6 +70,21 @@ export function PaymentsView() {
       load();
     } catch (e) {
       toast.error((e as Error).message);
+    }
+  }
+
+  async function deleteInvoice() {
+    if (!deleteInv) return;
+    setDeleting(true);
+    try {
+      await api(`/api/invoices/${deleteInv.id}`, { method: "DELETE" });
+      toast.success(lang === "ar" ? "تم حذف الفاتورة" : "Invoice deleted");
+      setDeleteInv(null);
+      load();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -160,6 +177,9 @@ export function PaymentsView() {
                             <Button size="icon" variant="ghost" onClick={() => setPrintInv(inv)} className="w-7 h-7 text-[#CBD5E1] hover:bg-[#17243B]" title={t("print")}>
                               <Printer className="w-3.5 h-3.5" />
                             </Button>
+                            <Button size="icon" variant="ghost" onClick={() => setDeleteInv(inv)} className="w-7 h-7 text-red-400 hover:bg-red-500/10 hover:text-red-300" title={t("delete")}>
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
                           </div>
                         </td>
                       </tr>
@@ -249,6 +269,24 @@ export function PaymentsView() {
             <Button variant="ghost" onClick={() => setPayOpen(false)} className="text-[#CBD5E1]">{t("cancel")}</Button>
             <Button onClick={savePayment} disabled={saving} className="bg-[#0FA36B] hover:bg-[#12BE80] text-white font-bold gap-2">
               {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />} {t("save")}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* invoice delete confirmation */}
+      <Dialog open={deleteInv !== null} onOpenChange={(v) => !v && setDeleteInv(null)}>
+        <DialogContent className="bg-[#0E1A31] border-[#24344F] text-[#F1F5F9] max-w-sm">
+          <DialogHeader><DialogTitle className="text-white">{t("delete")}</DialogTitle></DialogHeader>
+          <p className="text-[12px] text-[#CBD5E1] leading-relaxed" dir="auto">
+            {lang === "ar"
+              ? `سيتم حذف الفاتورة ${deleteInv?.number ?? ""} نهائياً. الدفعات المرتبطة بها ستبقى محفوظة ضمن الإيرادات.`
+              : `Delete invoice ${deleteInv?.number ?? ""} permanently? Linked payments will remain in the revenue ledger.`}
+          </p>
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" onClick={() => setDeleteInv(null)} className="text-[#CBD5E1]">{t("cancel")}</Button>
+            <Button onClick={() => void deleteInvoice()} disabled={deleting} className="bg-red-600 hover:bg-red-700 text-white font-bold gap-2">
+              {deleting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}{t("delete")}
             </Button>
           </div>
         </DialogContent>
