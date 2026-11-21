@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { api, useApp } from "@/lib/store";
 import { RouterSelect } from "@/components/ui/router-select";
 import { KpiCards } from "./kpi-cards";
+import { HotspotLiveStrip } from "./hotspot-live-strip";
 import { NetworkChart } from "./network-chart";
 import { StatusDonut } from "./status-donut";
 import { WorldMap } from "./world-map";
@@ -47,7 +48,7 @@ export function DashboardView() {
 
   useEffect(() => {
     load();
-    const timer = setInterval(load, 30000);
+    const timer = setInterval(load, 15000);
     return () => clearInterval(timer);
   }, [load]);
 
@@ -96,6 +97,7 @@ export function DashboardView() {
         <RouterSelect value={routerId} onChange={setRouterId} className="w-56" />
       </div>
       <KpiCards kpis={data.kpis} />
+      <HotspotLiveStrip routerId={routerId} />
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-3.5">
         <div className="lg:col-span-4">
           <WorldMap mapUsers={data.mapUsers} />

@@ -24,7 +24,7 @@ const SECTION_IDS = [
   "dhcp_servers", "dhcp_networks", "ip_addresses", "ip_pools",
   "vlans", "bridges", "bridge_ports",
   "wireless", "wifi", "capsman", "capsman_provisions",
-  "hotspot_servers", "hotspot_users", "hotspot_profiles",
+  "hotspot_servers", "hotspot_users", "hotspot_profiles", "hotspot_active", "hotspot_hosts", "hotspot_bindings",
   "ppp_secrets", "ppp_profiles",
   "simple_queues", "queue_trees",
   "firewall_filter", "firewall_nat", "dns", "routes", "interfaces", "services",
@@ -140,6 +140,26 @@ export function RosManagerView() {
   }, [routerId, section]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Live Hotspot menus: keep the read-only tables fresh without the loading
+  // flicker (they change every time a client connects or disconnects).
+  const silentLoad = useCallback(async () => {
+    if (!routerId) return;
+    try {
+      const d = await api<RowsResp>(`/api/ros?routerId=${routerId}&section=${section}&_=${Date.now()}`);
+      setResp(d);
+    } catch { /* keep the last good snapshot */ }
+  }, [routerId, section]);
+
+  useEffect(() => {
+    if (!section.startsWith("hotspot_")) return;
+    if (!["hotspot_active", "hotspot_hosts", "hotspot_bindings"].includes(section)) return;
+    const timer = setInterval(() => {
+      if (typeof document !== "undefined" && document.hidden) return;
+      void silentLoad();
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [section, silentLoad]);
 
   async function submitWrite() {
     if (!resp || !editing) return;

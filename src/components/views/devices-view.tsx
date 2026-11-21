@@ -6,6 +6,7 @@ import { makeT, type DictKey } from "@/lib/i18n";
 import { useRealtime, type RealtimeDevice, type RealtimeStats } from "@/hooks/use-realtime";
 import { DeviceDetailSheet } from "@/components/devices/device-detail-sheet";
 import { SourceTable } from "@/components/devices/source-tables";
+import { HotspotLivePanel } from "@/components/devices/hotspot-live-panel";
 import { LiveTrafficPanel } from "@/components/devices/live-traffic";
 import { NetworkResourcesPanel } from "@/components/devices/network-resources";
 import { Button } from "@/components/ui/button";
@@ -17,8 +18,8 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-  Loader2, RefreshCw, Search, Download, Radio, Wifi, WifiOff, Smartphone, Laptop,
-  Server, ShieldBan, Sparkles, Activity, Boxes, CircleDot, ChevronRight, Zap, AlertTriangle,
+  Loader2, RefreshCw, Search, Download, Radio, Wifi, Laptop, Users, MonitorSmartphone, Link2,
+  Server, ShieldBan, Sparkles, Boxes, CircleDot, ChevronRight, Zap, AlertTriangle,
 } from "lucide-react";
 import {
   BarChart, Bar, PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, Tooltip as ReTooltip,
@@ -48,7 +49,7 @@ interface StatsPayload {
   routers: RouterMeta[];
 }
 
-const TABS = ["dashboard", "inventory", "unknown", "dhcp_leases", "arp", "bridge_hosts", "wireless", "hotspot_active", "ppp_active", "traffic", "resources"] as const;
+const TABS = ["dashboard", "inventory", "unknown", "dhcp_leases", "arp", "bridge_hosts", "wireless", "hotspot_active", "hotspot_hosts", "hotspot_bindings", "ppp_active", "traffic", "resources"] as const;
 type TabKey = (typeof TABS)[number];
 
 const COLORS = ["#1685FF", "#22D3EE", "#10B981", "#F59E0B", "#EF4444", "#8B5CF6", "#EC4899", "#14B8A6"];
@@ -60,12 +61,15 @@ export function DevicesView() {
   const [routerId, setRouterId] = useState("all");
   const [tab, setTab] = useState<TabKey>("dashboard");
   const [stats, setStats] = useState<StatsPayload | null>(null);
+  const [liveCounts, setLiveCounts] = useState<{ active: number; hosts: number; bindings: number; connectedBindings: number } | null>(null);
   const [devices, setDevices] = useState<DeviceRow[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [pageSize] = useState(25);
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
+  // The operator only wants connected devices in the inventory: default to
+  // "online" and let the status selector bring the rest back when needed.
+  const [statusFilter, setStatusFilter] = useState("online");
   const [typeFilter, setTypeFilter] = useState("all");
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
@@ -98,8 +102,26 @@ export function DevicesView() {
 
   useEffect(() => { refresh(); }, [refresh]);
 
+  // Live Hotspot counters for the dashboard KPIs — read from the router every
+  // 3 seconds so Active / Hosts / Bindings are never a stale DB snapshot.
+  useEffect(() => {
+    if (tab !== "dashboard") return;
+    let disposed = false;
+    const pull = async () => {
+      if (typeof document !== "undefined" && document.hidden) return;
+      try {
+        const res = await api<{ counts: { active: number; hosts: number; bindings: number; connectedBindings: number } }>(`/api/hotspot/live?routerId=${routerId}&_=${Date.now()}`);
+        if (!disposed) setLiveCounts(res.counts);
+      } catch { /* keep the previous value while the router reconnects */ }
+    };
+    pull();
+    const timer = setInterval(pull, 3000);
+    return () => { disposed = true; clearInterval(timer); };
+  }, [routerId, tab]);
+
   // realtime updates (socket primary, polling fallback)
   const { mode } = useRealtime({
+    pollDevicesMs: 8000,
     onStats: (k) => setStats((prev) => (prev ? { ...prev, kpi: k } : prev)),
     onDevices: (incoming: RealtimeDevice[]) => {
       setDevices((prev) => {
@@ -110,7 +132,10 @@ export function DevicesView() {
             ? { ...existing, ...u, interface: u.interface ?? null, vlan: u.vlan ?? null, ap: u.ap ?? null, hostname: u.hostname, customName: u.customName, router: existing.router }
             : { ...(u as unknown as DeviceRow), router: { id: "", name: u.router?.name ?? "", status: "online", lastSyncAt: null, lastSyncOk: null, isDemo: false } });
         }
-        return [...map.values()];
+        // Never let the realtime stream (which carries every device) re-add a
+        // disconnected device to a list the operator filtered to online only.
+        const merged = [...map.values()];
+        return statusFilter === "all" ? merged : merged.filter((d) => d.status === statusFilter);
       });
       // light refresh for stats accuracy
       authFetch(`/api/devices?stats=1&routerId=${routerId}`).then((r) => r.json()).then((s: StatsPayload) => setStats(s)).catch(() => {});
@@ -221,6 +246,8 @@ export function DevicesView() {
           <TabsTrigger value="bridge_hosts" className="text-[11px] h-7">{t("bridgeHosts")}</TabsTrigger>
           <TabsTrigger value="wireless" className="text-[11px] h-7">{t("wirelessClients")}</TabsTrigger>
           <TabsTrigger value="hotspot_active" className="text-[11px] h-7">{t("hotspotSessions")}</TabsTrigger>
+          <TabsTrigger value="hotspot_hosts" className="text-[11px] h-7">{t("hotspotHosts")}</TabsTrigger>
+          <TabsTrigger value="hotspot_bindings" className="text-[11px] h-7">{t("hotspotBindings")}</TabsTrigger>
           <TabsTrigger value="ppp_active" className="text-[11px] h-7">{t("pppoeSessions")}</TabsTrigger>
           <TabsTrigger value="traffic" className="text-[11px] h-7">{t("liveTraffic")}</TabsTrigger>
           <TabsTrigger value="resources" className="text-[11px] h-7">{t("networkResources")}</TabsTrigger>
@@ -239,14 +266,14 @@ export function DevicesView() {
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
                 <KpiCard icon={<Boxes className="w-4 h-4 text-[#1685FF]" />} label={t("totalDevices")} value={fmtNum(kpi.total)} />
                 <KpiCard icon={<CircleDot className="w-4 h-4 text-emerald-400" />} label={t("onlineNow")} value={fmtNum(kpi.online)} accent="emerald" />
-                <KpiCard icon={<WifiOff className="w-4 h-4 text-red-400" />} label={t("offlineNow")} value={fmtNum(kpi.offline)} accent="red" />
+                <KpiCard icon={<Users className="w-4 h-4 text-emerald-400" />} label={t("hotspotActiveNow")} value={fmtNum(liveCounts?.active ?? 0)} accent="emerald" live />
+                <KpiCard icon={<MonitorSmartphone className="w-4 h-4 text-sky-400" />} label={t("hotspotHostsNow")} value={fmtNum(liveCounts?.hosts ?? 0)} accent="amber" live />
+                <KpiCard icon={<Link2 className="w-4 h-4 text-violet-400" />} label={t("hotspotBindingsNow")} value={fmtNum(liveCounts?.connectedBindings ?? 0)} live />
                 <KpiCard icon={<Wifi className="w-4 h-4 text-[#22D3EE]" />} label={t("wirelessClients")} value={fmtNum(kpi.wireless)} />
                 <KpiCard icon={<Laptop className="w-4 h-4 text-[#1685FF]" />} label={t("wiredDevices")} value={fmtNum(kpi.wired)} />
-                <KpiCard icon={<Smartphone className="w-4 h-4 text-[#22D3EE]" />} label={t("hotspotClients")} value={fmtNum(kpi.hotspot)} />
                 <KpiCard icon={<Server className="w-4 h-4 text-[#1685FF]" />} label={t("pppoeClients")} value={fmtNum(kpi.pppoe)} />
                 <KpiCard icon={<Sparkles className="w-4 h-4 text-amber-400" />} label={t("newDevices")} value={fmtNum(kpi.newDevices)} accent="amber" />
                 <KpiCard icon={<ShieldBan className="w-4 h-4 text-orange-400" />} label={t("blockedDevices")} value={fmtNum(kpi.blockedDevices)} />
-                <KpiCard icon={<Activity className="w-4 h-4 text-sky-400" />} label={t("idleDevices")} value={fmtNum(kpi.idle)} />
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -516,8 +543,17 @@ export function DevicesView() {
       )}
 
       {/* SOURCE TABLES */}
-      {(tab === "dhcp_leases" || tab === "arp" || tab === "bridge_hosts" || tab === "wireless" || tab === "hotspot_active" || tab === "ppp_active") && (
+      {(tab === "dhcp_leases" || tab === "arp" || tab === "bridge_hosts" || tab === "wireless" || tab === "ppp_active") && (
         <SourceTable source={tab} routerId={routerId} openDevice={setDetailId} onChanged={refresh} />
+      )}
+
+      {/* LIVE HOTSPOT — Active / Hosts / Bindings straight from RouterOS */}
+      {(tab === "hotspot_active" || tab === "hotspot_hosts" || tab === "hotspot_bindings") && (
+        <HotspotLivePanel
+          mode={tab === "hotspot_active" ? "active" : tab === "hotspot_hosts" ? "hosts" : "bindings"}
+          routerId={routerId}
+          openDevice={setDetailId}
+        />
       )}
 
       {tab === "traffic" && <LiveTrafficPanel routerId={routerId} />}
@@ -528,14 +564,22 @@ export function DevicesView() {
   );
 }
 
-function KpiCard({ icon, label, value, accent }: { icon: React.ReactNode; label: string; value: string; accent?: string }) {
+function KpiCard({ icon, label, value, accent, live }: { icon: React.ReactNode; label: string; value: string; accent?: string; live?: boolean }) {
   return (
-    <div className="panel p-3.5 flex items-center gap-3">
+    <div className={`panel p-3.5 flex items-center gap-3 ${live ? "ring-1 ring-emerald-500/20" : ""}`}>
       <div className={`w-9 h-9 rounded-lg bg-[#111C30] flex items-center justify-center shrink-0 ${accent === "emerald" ? "!bg-emerald-950/50" : accent === "red" ? "!bg-red-950/50" : accent === "amber" ? "!bg-amber-950/50" : ""}`}>
         {icon}
       </div>
       <div className="min-w-0">
-        <div className="text-[10px] text-[#64748B] truncate" dir="auto">{label}</div>
+        <div className="text-[10px] text-[#64748B] truncate flex items-center gap-1" dir="auto">
+          {live && (
+            <span className="relative flex h-1.5 w-1.5 shrink-0">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-400" />
+            </span>
+          )}
+          <span className="truncate">{label}</span>
+        </div>
         <div className="text-[18px] font-extrabold text-white num" dir="ltr">{value}</div>
       </div>
     </div>
