@@ -10,7 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { RouterSelect } from "@/components/ui/router-select";
 import { StatusPill } from "./hotspot-users-view";
 import { DlgField } from "./packages-view";
-import { Plus, Loader2, Receipt, Banknote, FileText, Printer, Trash2 } from "lucide-react";
+import { Plus, Loader2, Receipt, Banknote, FileText, Printer, Trash2, Eraser } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface Invoice {
@@ -33,6 +33,8 @@ export function PaymentsView() {
   const [printInv, setPrintInv] = useState<Invoice | null>(null);
   const [deleteInv, setDeleteInv] = useState<Invoice | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [clearOpen, setClearOpen] = useState(false);
+  const [clearing, setClearing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [routerId, setRouterId] = useState("all");
   const [invForm, setInvForm] = useState({ customerName: "", customerPhone: "", description: "", amount: "", discount: "0", taxRate: "14", dueDate: "" });
@@ -88,6 +90,23 @@ export function PaymentsView() {
     }
   }
 
+  async function clearFinancials() {
+    setClearing(true);
+    try {
+      const res = await api<{ ok: boolean; deleted: Record<string, number> }>("/api/invoices", { method: "DELETE" });
+      const d = res.deleted ?? {};
+      toast.success(lang === "ar"
+        ? `تم حذف ${d.invoices ?? 0} فاتورة و${d.payments ?? 0} دفعة و${d.txs ?? 0} حركة — كل الأرقام صفر`
+        : `Deleted ${d.invoices ?? 0} invoices, ${d.payments ?? 0} payments, ${d.txs ?? 0} ledger rows`);
+      setClearOpen(false);
+      load();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setClearing(false);
+    }
+  }
+
   async function savePayment() {
     if (!payForm.amount) {
       toast.error(lang === "ar" ? "المبلغ مطلوب" : "Amount required");
@@ -115,6 +134,9 @@ export function PaymentsView() {
         <h1 className="text-lg font-extrabold text-white">{t("payments")}</h1>
         <div className="flex items-center gap-2">
           <RouterSelect value={routerId} onChange={setRouterId} className="w-48" />
+          <Button onClick={() => setClearOpen(true)} variant="ghost" className="text-red-300 border border-red-500/40 hover:bg-red-500/10 text-xs gap-1.5 font-bold">
+            <Eraser className="w-3.5 h-3.5" /> {lang === "ar" ? "تصفية مالية" : "Clear financials"}
+          </Button>
           <Button onClick={() => setPayOpen(true)} variant="ghost" className="text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500/10 text-xs gap-1.5 font-bold">
             <Banknote className="w-3.5 h-3.5" /> {t("recordPayment")}
           </Button>
@@ -280,13 +302,31 @@ export function PaymentsView() {
           <DialogHeader><DialogTitle className="text-white">{t("delete")}</DialogTitle></DialogHeader>
           <p className="text-[12px] text-[#CBD5E1] leading-relaxed" dir="auto">
             {lang === "ar"
-              ? `سيتم حذف الفاتورة ${deleteInv?.number ?? ""} نهائياً. الدفعات المرتبطة بها ستبقى محفوظة ضمن الإيرادات.`
-              : `Delete invoice ${deleteInv?.number ?? ""} permanently? Linked payments will remain in the revenue ledger.`}
+              ? `سيتم حذف الفاتورة ${deleteInv?.number ?? ""} نهائياً مع دفعاتها وحركة الإيراد المرتبطة — كل الأرقام الخاصة بيها هتختفي.`
+              : `Delete invoice ${deleteInv?.number ?? ""}, its payments and the linked ledger entry — all of its numbers will disappear.`}
           </p>
           <div className="flex justify-end gap-2">
             <Button variant="ghost" onClick={() => setDeleteInv(null)} className="text-[#CBD5E1]">{t("cancel")}</Button>
             <Button onClick={() => void deleteInvoice()} disabled={deleting} className="bg-red-600 hover:bg-red-700 text-white font-bold gap-2">
               {deleting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}{t("delete")}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* clear all financial data */}
+      <Dialog open={clearOpen} onOpenChange={(v) => !v && setClearOpen(false)}>
+        <DialogContent className="bg-[#0E1A31] border-[#24344F] text-[#F1F5F9] max-w-sm">
+          <DialogHeader><DialogTitle className="text-white">{lang === "ar" ? "تصفية كل البيانات المالية" : "Clear all financial data"}</DialogTitle></DialogHeader>
+          <p className="text-[12px] text-[#CBD5E1] leading-relaxed" dir="auto">
+            {lang === "ar"
+              ? `سيتم حذف كل الفواتير (${invoices?.length ?? 0}) والدفعات (${payments?.length ?? 0}) وكل حركات الإيرادات نهائياً. الإيرادات وصافي الربح وعدد الحركات هيرجعوا صفر. لا يمكن التراجع.`
+              : `This permanently deletes all invoices (${invoices?.length ?? 0}), payments (${payments?.length ?? 0}) and ledger rows. Revenue, net profit and transaction counts will return to zero. Cannot be undone.`}
+          </p>
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" onClick={() => setClearOpen(false)} className="text-[#CBD5E1]">{t("cancel")}</Button>
+            <Button onClick={() => void clearFinancials()} disabled={clearing} className="bg-red-600 hover:bg-red-700 text-white font-bold gap-2">
+              {clearing && <Loader2 className="w-3.5 h-3.5 animate-spin" />}{t("delete")}
             </Button>
           </div>
         </DialogContent>

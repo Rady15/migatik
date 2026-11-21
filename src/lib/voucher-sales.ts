@@ -36,6 +36,13 @@ export async function ensureVoucherSale(voucherId: string): Promise<VoucherSaleR
   });
   if (!v) return { ok: false, created: false, error: "الكرت غير موجود" };
 
+  // A deleted sale must stay deleted: the usage scheduler calls this every
+  // minute for used cards, so a tombstone keeps the financial numbers at zero.
+  const voided = await db.activityLog.findFirst({
+    where: { action: "voucher_sale_deleted", target: v.id },
+  });
+  if (voided) return { ok: true, created: false };
+
   const price = Math.round((Number(v.price) || 0) * 100) / 100;
   if (price <= 0) return { ok: true, created: false }; // free card — nothing to bill
 

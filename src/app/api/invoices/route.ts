@@ -45,3 +45,55 @@ export const POST = withOrgStrict(async (req: NextRequest, ctx: OrgContext & { e
     return serverError(e);
   }
 });
+
+/**
+ * DELETE /api/invoices — clear the whole financial trail for the active org.
+ * Removes invoices, payments, refunds, commissions and the CustomerTx ledger
+ * so every money KPI goes back to zero. Voucher sales get a tombstone so the
+ * usage scheduler cannot silently re-create them a minute later.
+ */
+export const DELETE = withOrgStrict(async (_req: NextRequest, ctx: OrgContext) => {
+  try {
+    const orgId = ctx.effectiveOrgId ?? ctx.org?.id;
+    if (!orgId) return NextResponse.json({ error: "حدد المؤسسة أولاً" }, { status: 400 });
+    const scope = { organizationId: orgId };
+
+    const saleTxs = await db.customerTx.findMany({
+      where: { ...scope, refType: "voucher" },
+      select: { refId: true },
+    });
+    const voucherIds = [...new Set(saleTxs.map((t) => t.refId).filter(Boolean))] as string[];
+
+    const [invoices, payments, txs, refunds, commissions] = await Promise.all([
+      db.invoice.count({ where: scope }),
+      db.payment.count({ where: scope }),
+      db.customerTx.count({ where: scope }),
+      db.refund.count({ where: scope }),
+      db.employeeCommission.count({ where: scope }),
+    ]);
+
+    await db.refund.deleteMany({ where: scope });
+    await db.employeeCommission.deleteMany({ where: scope });
+    await db.customerTx.deleteMany({ where: scope });
+    await db.payment.deleteMany({ where: scope });
+    await db.invoice.deleteMany({ where: scope });
+
+    for (const voucherId of voucherIds) {
+      await db.activityLog.create({
+        data: { actor: ctx.username, action: "voucher_sale_deleted", target: voucherId, details: "تصفية البيانات المالية" },
+      });
+    }
+    await db.activityLog.create({
+      data: {
+        actor: ctx.username,
+        action: "تصفية البيانات المالية",
+        target: `${invoices} invoices`,
+        details: `payments ${payments}, ledger ${txs}, refunds ${refunds}, commissions ${commissions}`,
+      },
+    });
+
+    return NextResponse.json({ ok: true, deleted: { invoices, payments, txs, refunds, commissions }, vouchersVoided: voucherIds.length });
+  } catch (e) {
+    return serverError(e);
+  }
+});
